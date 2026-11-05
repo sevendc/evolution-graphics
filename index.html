@@ -53,8 +53,8 @@
     h1 { margin: 9px 0 0; font-size: clamp(26px, 4vw, 42px); font-weight: 540; letter-spacing: -.045em; line-height: 1.07; }
     .intro p { max-width: 470px; margin: 0 0 3px; color: var(--muted); font-size: 13px; line-height: 1.65; }
 
-    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 316px; gap: 18px; align-items: start; }
-    .visual-panel, .control-panel { border: 1px solid var(--line); border-radius: 9px; background: rgba(24, 26, 23, .9); }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 280px 280px; gap: 18px; align-items: start; }
+    .visual-panel, .control-panel, .focus-panel { border: 1px solid var(--line); border-radius: 9px; background: rgba(24, 26, 23, .9); }
     .visual-panel { padding: clamp(14px, 2.2vw, 24px); }
     .compare { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(12px, 2vw, 22px); }
     .image-card { min-width: 0; }
@@ -64,6 +64,9 @@
     .image-tag { color: #7e8678; font-size: 10px; }
     .canvas-wrap { position: relative; overflow: hidden; aspect-ratio: 1; border: 1px solid #33372f; border-radius: 5px; background-color: #121410; background-image: linear-gradient(45deg, #1a1c18 25%, transparent 25%), linear-gradient(-45deg, #1a1c18 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1c18 75%), linear-gradient(-45deg, transparent 75%, #1a1c18 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
     .canvas-wrap canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .selection-overlay { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+    .selection-overlay[aria-disabled="true"] { pointer-events: none; cursor: not-allowed; }
+    .selection-box { position: absolute; display: none; border: 2px solid var(--lime); background: rgba(215, 251, 115, .12); pointer-events: none; }
     .empty-note { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; color: #7f8679; font-size: 12px; text-align: center; line-height: 1.6; pointer-events: none; }
     .compare-caption { display: flex; justify-content: space-between; gap: 10px; margin-top: 9px; color: #7e8678; font-size: 10px; }
 
@@ -74,9 +77,10 @@
     .progress-track { height: 3px; margin-top: 13px; overflow: hidden; border-radius: 3px; background: #2a2d27; }
     .progress-fill { width: 0; height: 100%; background: var(--lime); transition: width .3s ease; }
 
-    .control-panel { padding: 18px; }
+    .control-panel, .focus-panel { padding: 18px; }
     .section-label { color: #a4aa9c; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
     .source-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .source-actions[hidden] { display: none; }
     .button { display: inline-flex; min-height: 37px; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; border: 1px solid #42473e; border-radius: 5px; background: #22251f; color: #e8ebdf; font-size: 11px; font-weight: 620; cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
     .button:hover { border-color: #6b755b; background: #2a2e25; }
     .button:active { transform: translateY(1px); }
@@ -103,7 +107,8 @@
     .run-actions { display: grid; grid-template-columns: 1fr 42px; gap: 8px; margin-top: 19px; }
     .icon-button { padding: 0; font-size: 15px; }
     .export-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 10px; }
+    .stats-block { margin-top: 21px; padding-top: 16px; border-top: 1px solid var(--line); }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 10px; }
     .stat-label { color: #81887c; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
     .stat-value { margin-top: 4px; color: #eef0e7; font-size: 14px; font-variant-numeric: tabular-nums; }
     .stat-detail { margin-top: 3px; color: #81887c; font-size: 9px; line-height: 1.4; font-variant-numeric: tabular-nums; }
@@ -114,8 +119,14 @@
     footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 17px; color: #737a70; font-size: 10px; line-height: 1.5; }
     footer span:last-child { text-align: right; }
 
+    @media (max-width: 1150px) {
+      .workspace { grid-template-columns: minmax(0, 1fr) 290px; gap: 12px; }
+      .focus-panel { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 22px; }
+      .focus-panel > .divider { display: none; }
+      .focus-block, .simplify-block { min-width: 0; }
+    }
     @media (max-width: 850px) {
-      .workspace { grid-template-columns: minmax(0, 1fr) 270px; gap: 12px; }
+      .workspace { grid-template-columns: minmax(0, 1fr) 270px; }
       .control-panel { padding: 15px; }
       .intro p { max-width: 360px; }
     }
@@ -124,12 +135,12 @@
       .intro { display: block; padding: 25px 0 20px; }
       .intro p { margin-top: 12px; }
       .workspace { grid-template-columns: 1fr; }
+      .focus-panel { display: block; }
       .control-panel { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
-      .control-panel > .source-block, .control-panel > .divider, .control-panel > .stats-block, .control-panel > .notice { grid-column: 1 / -1; }
+      .control-panel > .source-block, .control-panel > .divider, .control-panel > .notice { grid-column: 1 / -1; }
       .control-panel > .settings-block { grid-column: 1; }
       .control-panel > .action-block { grid-column: 2; grid-row: 3; align-self: end; }
-      .control-panel > .stats-block { grid-row: 4; }
-      .control-panel > .notice { grid-row: 5; }
+      .focus-block, .simplify-block { grid-column: 1 / -1; }
       .divider { margin: 15px 0; }
       footer { font-size: 9px; }
     }
@@ -141,7 +152,7 @@
       .fitness-value { font-size: 17px; }
       .control-panel { display: block; }
       .control-panel > .action-block { margin-top: 18px; }
-      .control-panel > .stats-block { margin-top: 19px; }
+      .stats { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
@@ -173,6 +184,9 @@
             <div class="image-heading"><div class="image-title"><span class="image-index">01</span> Target</div><span class="image-tag">REFERENCE</span></div>
             <div class="canvas-wrap">
               <canvas id="targetCanvas" width="160" height="160" aria-label="Target image"></canvas>
+              <div id="selectionOverlay" class="selection-overlay" role="group" aria-label="Drag to select an area to focus evolution on" aria-disabled="true">
+                <div id="selectionBox" class="selection-box"></div>
+              </div>
               <div id="targetEmpty" class="empty-note">Choose an image, capture a frame,<br>or try the sample artwork.</div>
             </div>
           </div>
@@ -193,6 +207,15 @@
         </div>
         <div class="progress-track" aria-label="Evolution progress"><div id="progressFill" class="progress-fill"></div></div>
         <div class="compare-caption"><span>Evolution runs locally in your browser</span><span id="resolutionCaption">160 × 160 working resolution</span></div>
+        <div class="stats-block">
+          <div class="section-label">Live statistics</div>
+          <div class="stats" style="margin-top: 14px">
+            <div><div class="stat-label">Generation</div><div id="generationStat" class="stat-value">0</div></div>
+            <div><div class="stat-label">Improvement</div><div id="improvementStat" class="stat-value">—</div></div>
+            <div><div class="stat-label">Live triangles</div><div id="liveTriangleStat" class="stat-value">128</div><div id="genomeStat" class="stat-detail">6.0 KB DNA</div></div>
+            <div><div class="stat-label">Candidates / sec</div><div id="rateStat" class="stat-value">—</div><div id="rateDetail" class="stat-detail">—</div></div>
+          </div>
+        </div>
       </div>
 
       <aside class="control-panel">
@@ -253,7 +276,7 @@
         </div>
 
         <div class="action-block">
-          <div class="section-label">04 / Evolve</div>
+          <div class="section-label">06 / Evolve</div>
           <div class="run-actions">
             <button id="runButton" class="button primary" type="button" disabled>▶ &nbsp; Start evolution</button>
             <button id="resetButton" class="button icon-button" type="button" title="Reset evolution" aria-label="Reset evolution" disabled>↺</button>
@@ -264,18 +287,39 @@
           </div>
         </div>
 
-        <div class="divider"></div>
+        <div id="notice" class="notice" role="status">WebGPU is required. Use a recent Chrome or Edge on HTTPS or localhost.</div>
+      </aside>
 
-        <div class="stats-block">
-          <div class="section-label">Live statistics</div>
-          <div class="stats" style="margin-top: 14px">
-            <div><div class="stat-label">Generation</div><div id="generationStat" class="stat-value">0</div></div>
-            <div><div class="stat-label">Improvement</div><div id="improvementStat" class="stat-value">—</div></div>
-            <div><div class="stat-label">Live triangles</div><div id="liveTriangleStat" class="stat-value">128</div><div id="genomeStat" class="stat-detail">6.0 KB DNA</div></div>
-            <div><div class="stat-label">Candidates / sec</div><div id="rateStat" class="stat-value">—</div><div id="rateDetail" class="stat-detail">—</div></div>
+      <aside class="focus-panel" aria-label="Focus and simplification">
+        <div class="focus-block">
+          <div class="section-label">04 / Focus evolution</div>
+          <div id="focusHelp" class="setting-help">Drag a rectangle on the target image to guide mutations toward that area.</div>
+          <button id="clearFocusButton" class="button wide" type="button" disabled>Clear focus area</button>
+          <div class="setting">
+            <div class="setting-head"><label for="focusRange">Guided mutations in selection</label><span id="focusValue" class="setting-value">70%</span></div>
+            <input id="focusRange" type="range" min="0" max="100" step="5" value="70" disabled>
+            <div class="range-hints"><span>0% / mostly global</span><span>100% / focused</span></div>
+            <div class="setting-help">Focused proposals mix error hotspots with random target-image samples, using sampled color and varied triangle shapes to add detail. Fitness scores the whole image.</div>
           </div>
         </div>
-        <div id="notice" class="notice" role="status">WebGPU is required. Use a recent Chrome or Edge on HTTPS or localhost.</div>
+
+        <div class="divider"></div>
+
+        <div class="simplify-block">
+          <div class="section-label">05 / Simplify the genome</div>
+          <div class="setting">
+            <div class="setting-head"><label for="decimateRange">Triangles to remove</label><span id="decimateValue" class="setting-value">10%</span></div>
+            <input id="decimateRange" type="range" min="1" max="50" step="1" value="10">
+            <div class="range-hints"><span>1% / subtle</span><span>50% / aggressive</span></div>
+            <div class="setting-help">Tests each triangle against the current image, then previews removing the least-impactful ones.</div>
+          </div>
+          <button id="decimateButton" class="button wide" type="button" disabled>Analyze simplification</button>
+          <div id="decimateSummary" class="setting-help" aria-live="polite"></div>
+          <div id="decimateReview" class="source-actions" hidden>
+            <button id="keepDecimationButton" class="button primary" type="button">Keep</button>
+            <button id="discardDecimationButton" class="button" type="button">Discard</button>
+          </div>
+        </div>
       </aside>
     </section>
 
@@ -305,12 +349,16 @@
     const mutationRange = document.querySelector("#mutationRange");
     const structureRange = document.querySelector("#structureRange");
     const populationRange = document.querySelector("#populationRange");
+    const decimateRange = document.querySelector("#decimateRange");
+    const focusRange = document.querySelector("#focusRange");
+    const selectionOverlay = document.querySelector("#selectionOverlay");
+    const selectionBox = document.querySelector("#selectionBox");
     const toonText = document.querySelector("#toonText");
     const toonFileInput = document.querySelector("#toonFileInput");
 
     const mutationShader = `
       struct Triangle { a: vec4f, b: vec4f, c: vec4f };
-      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, padding0: u32, padding1: u32, padding2: u32 };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, padding0: u32, focusMin: vec2f, focusMax: vec2f };
       const MAX_TRIANGLES: u32 = 512u;
       @group(0) @binding(0) var<storage, read_write> candidate: array<Triangle>;
       @group(0) @binding(1) var<storage, read> best: array<Triangle>;
@@ -331,6 +379,21 @@
 
       fn signedRandom(value: u32) -> f32 {
         return random01(value) * 2.0 - 1.0;
+      }
+
+      fn sourceTriangle(center: vec2f, pigment: vec3f, seed: u32, baseRadius: f32) -> Triangle {
+        let angle = random01(seed + 80u) * 6.2831853;
+        let radius = baseRadius * (0.35 + random01(seed + 81u) * 1.3);
+        let stretchX = 0.45 + random01(seed + 82u) * 1.4;
+        let stretchY = 0.45 + random01(seed + 83u) * 1.4;
+        let a = center + vec2f(cos(angle) * radius * stretchX, sin(angle) * radius * stretchY);
+        let b = center + vec2f(cos(angle + 2.0943951) * radius * stretchX, sin(angle + 2.0943951) * radius * stretchY);
+        let c = center + vec2f(cos(angle + 4.1887902) * radius * stretchX, sin(angle + 4.1887902) * radius * stretchY);
+        return Triangle(
+          vec4f(clamp(a, vec2f(0.0), vec2f(1.0)), pigment.r, pigment.g),
+          vec4f(clamp(b, vec2f(0.0), vec2f(1.0)), pigment.b, 0.55 + random01(seed + 84u) * 0.4),
+          vec4f(clamp(c, vec2f(0.0), vec2f(1.0)), 0.0, 0.0)
+        );
       }
 
       @compute @workgroup_size(64)
@@ -376,6 +439,18 @@
           currentCount - 1u
         );
         if (adding && i == currentCount) {
+          if (params.focusEnabled == 1u && random01(seed + 35u) < params.focusProbability) {
+            let samplePosition = mix(params.focusMin, params.focusMax, vec2f(random01(seed + 36u), random01(seed + 37u)));
+            let dims = textureDimensions(targetImage);
+            let point = vec2u(
+              min(u32(samplePosition.x * f32(dims.x)), dims.x - 1u),
+              min(u32(samplePosition.y * f32(dims.y)), dims.y - 1u)
+            );
+            let center = (vec2f(point) + vec2f(0.5)) / vec2f(dims);
+            let pigment = textureLoad(targetImage, vec2i(point), 0).rgb;
+            candidate[bufferIndex] = sourceTriangle(center, pigment, seed, 0.008 + params.mutation * 0.045);
+            return;
+          }
           let ax = random01(seed + 1u);
           let ay = random01(seed + 2u);
           let bx = random01(seed + 3u);
@@ -400,31 +475,38 @@
         }
         let guidedIndex = candidateIndex % candidateCount;
         if (params.initial == 0u && params.guideReady == 1u && i == guidedIndex && random01(seed + 32u) < 0.35) {
+          let focusThisMutation = params.focusEnabled == 1u && random01(seed + 34u) < params.focusProbability;
+          let randomSourceSample = focusThisMutation && random01(seed + 35u) < 0.5;
+          let dims = textureDimensions(targetImage);
           var hotspot = vec2u(0u);
           var hotspotError = -1.0;
-          for (var attempt = 0u; attempt < 16u; attempt += 1u) {
-            let sampleSeed = seed + 40u + attempt * 2u;
-            let point = vec2u(
-              min(u32(random01(sampleSeed) * f32(textureDimensions(targetImage).x)), textureDimensions(targetImage).x - 1u),
-              min(u32(random01(sampleSeed + 1u) * f32(textureDimensions(targetImage).y)), textureDimensions(targetImage).y - 1u)
+          if (randomSourceSample) {
+            let samplePosition = mix(params.focusMin, params.focusMax, vec2f(random01(seed + 36u), random01(seed + 37u)));
+            hotspot = vec2u(
+              min(u32(samplePosition.x * f32(dims.x)), dims.x - 1u),
+              min(u32(samplePosition.y * f32(dims.y)), dims.y - 1u)
             );
-            let error = errorMap[point.y * textureDimensions(targetImage).x + point.x];
-            if (error > hotspotError) {
-              hotspot = point;
-              hotspotError = error;
+          } else {
+            for (var attempt = 0u; attempt < 16u; attempt += 1u) {
+              let sampleSeed = seed + 40u + attempt * 2u;
+              var samplePosition = vec2f(random01(sampleSeed), random01(sampleSeed + 1u));
+              if (focusThisMutation) {
+                samplePosition = mix(params.focusMin, params.focusMax, samplePosition);
+              }
+              let point = vec2u(
+                min(u32(samplePosition.x * f32(dims.x)), dims.x - 1u),
+                min(u32(samplePosition.y * f32(dims.y)), dims.y - 1u)
+              );
+              let error = errorMap[point.y * dims.x + point.x];
+              if (error > hotspotError) {
+                hotspot = point;
+                hotspotError = error;
+              }
             }
           }
-          let center = (vec2f(hotspot) + vec2f(0.5)) / vec2f(textureDimensions(targetImage));
-          let radius = 0.008 + params.mutation * 0.045;
-          let angle = random01(seed + 80u) * 6.2831853;
-          let a = center + vec2f(cos(angle), sin(angle)) * radius;
-          let b = center + vec2f(cos(angle + 2.0943951), sin(angle + 2.0943951)) * radius;
-          let c = center + vec2f(cos(angle + 4.1887902), sin(angle + 4.1887902)) * radius;
+          let center = (vec2f(hotspot) + vec2f(0.5)) / vec2f(dims);
           let pigment = textureLoad(targetImage, vec2i(hotspot), 0).rgb;
-          triangle.a = vec4f(clamp(a, vec2f(0.0), vec2f(1.0)), pigment.r, pigment.g);
-          triangle.b = vec4f(clamp(b, vec2f(0.0), vec2f(1.0)), pigment.b, 0.55 + random01(seed + 81u) * 0.4);
-          triangle.c = vec4f(clamp(c, vec2f(0.0), vec2f(1.0)), 0.0, 0.0);
-          candidate[bufferIndex] = triangle;
+          candidate[bufferIndex] = sourceTriangle(center, pigment, seed, 0.008 + params.mutation * 0.045);
           return;
         }
         let chance = random01(seed + 11u);
@@ -464,7 +546,7 @@
     `;
 
     const evaluationShader = `
-      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, padding0: u32, padding1: u32, padding2: u32 };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, padding0: u32, focusMin: vec2f, focusMax: vec2f };
       const ATLAS_COLUMNS: u32 = 23u;
       @group(0) @binding(0) var targetImage: texture_2d<f32>;
       @group(0) @binding(1) var candidateAtlas: texture_2d<f32>;
@@ -504,7 +586,7 @@
 
     const finalizeShader = `
       struct Triangle { a: vec4f, b: vec4f, c: vec4f };
-      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, padding0: u32, padding1: u32, padding2: u32 };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, padding0: u32, focusMin: vec2f, focusMax: vec2f };
       const MAX_TRIANGLES: u32 = 512u;
       @group(0) @binding(0) var<storage, read> candidate: array<Triangle>;
       @group(0) @binding(1) var<storage, read_write> best: array<Triangle>;
@@ -534,7 +616,7 @@
 
     const rasterShader = `
       struct Triangle { a: vec4f, b: vec4f, c: vec4f };
-      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, padding0: u32, padding1: u32, padding2: u32 };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, padding0: u32, focusMin: vec2f, focusMax: vec2f };
       const MAX_TRIANGLES: u32 = 512u;
       @group(0) @binding(0) var<storage, read> candidate: array<Triangle>;
       @group(0) @binding(1) var<storage, read> candidateCounts: array<u32>;
@@ -650,6 +732,13 @@
     let seed = Math.floor(Math.random() * 0xffffffff);
     let selectedImageName = "sample";
     let pendingGenome = null;
+    let focusRegion = null;
+    let selectionStart = null;
+    let selectionPointerId = null;
+    let draftFocusRegion = null;
+    let decimationBusy = false;
+    let decimationPreview = null;
+    let resumeAfterDecimation = false;
 
     function setNotice(message, isError = false) {
       notice.textContent = message;
@@ -670,6 +759,93 @@
       document.querySelector("#mutationValue").textContent = (Number(mutationRange.value) / 100).toFixed(2);
       document.querySelector("#structureValue").textContent = `${Number(structureRange.value).toFixed(1)}%`;
       document.querySelector("#populationValue").textContent = populationRange.value;
+      document.querySelector("#decimateValue").textContent = `${decimateRange.value}%`;
+      document.querySelector("#focusValue").textContent = `${focusRange.value}%`;
+      syncFocusControls();
+      syncDecimationControls();
+    }
+
+    function syncDecimationControls() {
+      const locked = decimationBusy || decimationPreview !== null;
+      const unavailable = !gpu?.ready || !Number.isFinite(bestError);
+      selectionOverlay.setAttribute("aria-disabled", String(!targetLoaded || locked));
+      for (const id of ["uploadButton", "sampleButton", "cameraButton", "captureButton", "toonUploadButton", "toonImportButton", "imageInput", "toonFileInput", "toonText"]) {
+        document.querySelector(`#${id}`).disabled = locked;
+      }
+      runButton.disabled = locked || !gpu?.ready;
+      resetButton.disabled = locked || !gpu?.ready;
+      triangleRange.disabled = locked || running;
+      mutationRange.disabled = locked;
+      structureRange.disabled = locked;
+      populationRange.disabled = locked;
+      decimateRange.disabled = locked;
+      document.querySelector("#decimateButton").disabled = locked || unavailable || gpu.count < 2;
+      document.querySelector("#keepDecimationButton").disabled = !decimationPreview || decimationBusy;
+      document.querySelector("#discardDecimationButton").disabled = !decimationPreview || decimationBusy;
+      document.querySelector("#saveImageButton").disabled = locked || unavailable;
+      document.querySelector("#saveDnaButton").disabled = locked || unavailable;
+      syncFocusControls(locked);
+    }
+
+    function syncFocusControls(locked = decimationBusy || decimationPreview !== null) {
+      document.querySelector("#clearFocusButton").disabled = !focusRegion || locked;
+      focusRange.disabled = !focusRegion || locked;
+      document.querySelector("#focusHelp").textContent = focusRegion
+        ? "Focus area selected. Drag on the target to replace it, or clear it to return to global guidance."
+        : "Drag a rectangle on the target image to guide mutations toward that area.";
+      const region = draftFocusRegion || focusRegion;
+      selectionBox.style.display = region ? "block" : "none";
+      if (region) {
+        selectionBox.style.left = `${region.x0 * 100}%`;
+        selectionBox.style.top = `${region.y0 * 100}%`;
+        selectionBox.style.width = `${(region.x1 - region.x0) * 100}%`;
+        selectionBox.style.height = `${(region.y1 - region.y0) * 100}%`;
+      }
+    }
+
+    function normalizedSelectionPoint(event) {
+      const bounds = selectionOverlay.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
+        y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height))
+      };
+    }
+
+    function finishFocusSelection(event, keepSelection) {
+      if (selectionPointerId !== event.pointerId) return;
+      const point = normalizedSelectionPoint(event);
+      if (keepSelection && selectionStart) {
+        updateDraftFocusRegion(point);
+        const region = draftFocusRegion;
+        if (region.x1 - region.x0 >= 1 / SIZE && region.y1 - region.y0 >= 1 / SIZE) {
+          focusRegion = region;
+          setNotice("Focus area selected. Guided proposals mix high-error hotspots and random target-image samples there.");
+        }
+      }
+      selectionStart = null;
+      selectionPointerId = null;
+      draftFocusRegion = null;
+      syncDecimationControls();
+    }
+
+    function updateDraftFocusRegion(point) {
+      draftFocusRegion = {
+        x0: Math.min(selectionStart.x, point.x),
+        y0: Math.min(selectionStart.y, point.y),
+        x1: Math.max(selectionStart.x, point.x),
+        y1: Math.max(selectionStart.y, point.y)
+      };
+      syncFocusControls();
+    }
+
+    function writeFocusParams(view) {
+      const region = focusRegion || { x0: 0, y0: 0, x1: 1, y1: 1 };
+      view.setUint32(36, focusRegion ? 1 : 0, true);
+      view.setFloat32(40, Number(focusRange.value) / 100, true);
+      view.setFloat32(48, region.x0, true);
+      view.setFloat32(52, region.y0, true);
+      view.setFloat32(56, region.x1, true);
+      view.setFloat32(60, region.y1, true);
     }
 
     function updateGenomeSize(count) {
@@ -745,11 +921,21 @@
       gpu.countReadback.destroy();
       gpu.imageReadback.destroy();
       gpu.dnaReadback.destroy();
+      gpu.decimationScoreReadback.destroy();
       gpu = null;
     }
 
     async function targetReady() {
       setRunning(false);
+      decimationPreview = null;
+      decimationBusy = false;
+      resumeAfterDecimation = false;
+      focusRegion = null;
+      draftFocusRegion = null;
+      selectionStart = null;
+      selectionPointerId = null;
+      document.querySelector("#decimateReview").hidden = true;
+      document.querySelector("#decimateSummary").textContent = "";
       targetLoaded = true;
       const count = Number(triangleRange.value);
       document.querySelector("#targetEmpty").hidden = true;
@@ -775,6 +961,7 @@
       runButton.innerHTML = "▶ &nbsp; Start evolution";
       if (gpu) gpu.ready = false;
       await waitForEvolutionToStop();
+      syncDecimationControls();
       disposeGpu();
       if (device) await initializeEvolution();
       else await initializeGpu();
@@ -890,20 +1077,21 @@
         label: "candidate render atlas",
         size: [ATLAS_COLUMNS * SIZE, ATLAS_ROWS * SIZE],
         format: "rgba8unorm",
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC
       });
-      const candidateBuffer = createBuffer(candidateBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
+      const candidateBuffer = createBuffer(candidateBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
       const bestBuffer = createBuffer(maxGenomeBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
       const scoreBuffer = createBuffer(MAX_POPULATION * 4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
       const bestScoreBuffer = createBuffer(4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
       const candidateCountsBuffer = createBuffer(MAX_POPULATION * 4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
       const bestCountBuffer = createBuffer(4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
       const errorMapBuffer = createBuffer(SIZE * SIZE * 4, GPUBufferUsage.STORAGE);
-      const paramsBuffer = createBuffer(48, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+      const paramsBuffer = createBuffer(64, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
       const scoreReadback = createBuffer(4, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
       const countReadback = createBuffer(4, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
       const imageReadback = createBuffer(IMAGE_BYTES_PER_ROW * SIZE, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
       const dnaReadback = createBuffer(maxGenomeBytes, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+      const decimationScoreReadback = createBuffer(MAX_POPULATION * 4, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
 
       const mutatePipeline = createPipeline(mutationShader, "mutate genome");
       const evaluatePipeline = createPipeline(evaluationShader, "render and score candidate");
@@ -972,7 +1160,7 @@
       gpu = {
         ready: true, count, population, triangleBytes: maxGenomeBytes, candidateBytes, targetTexture, outputTexture, candidateAtlas,
         candidateBuffer, bestBuffer, scoreBuffer, bestScoreBuffer, candidateCountsBuffer, bestCountBuffer, errorMapBuffer, paramsBuffer,
-        scoreReadback, countReadback, imageReadback, dnaReadback,
+        scoreReadback, countReadback, imageReadback, dnaReadback, decimationScoreReadback,
         mutatePipeline, evaluatePipeline, finalizePipeline, renderPipeline, guidePipeline, rasterPipeline,
         mutateGroup, evaluateGroup, finalizeGroup, renderGroup, guideGroup, rasterGroup,
         hasGuidance: false,
@@ -1014,10 +1202,11 @@
       setNotice(pendingGenome
         ? `TOON genome loaded (${count} triangles). Start evolution to mutate and score it against the target.`
         : "Ready to evolve. The first generation starts from a random triangle genome.");
+      syncDecimationControls();
     }
 
     function writeParams(initial, batchStart = 0, batchCount = gpu.population) {
-      const data = new ArrayBuffer(48);
+      const data = new ArrayBuffer(64);
       const view = new DataView(data);
       view.setUint32(0, gpu.count, true);
       view.setUint32(4, gpu.population, true);
@@ -1028,6 +1217,7 @@
       view.setUint32(24, batchStart, true);
       view.setUint32(28, batchCount, true);
       view.setFloat32(32, Number(structureRange.value) / 100, true);
+      writeFocusParams(view);
       seed = (seed + 0x6d2b79f5) >>> 0;
       device.queue.writeBuffer(gpu.paramsBuffer, 0, data);
     }
@@ -1156,6 +1346,248 @@
       lastReportTime = now;
       lastReportGeneration = generation;
       lastReportCandidateEvaluations = candidateEvaluations;
+      syncDecimationControls();
+    }
+
+    async function readBestGenome() {
+      const byteLength = gpu.count * 48;
+      const encoder = device.createCommandEncoder({ label: "copy best genome for simplification" });
+      encoder.copyBufferToBuffer(gpu.bestBuffer, 0, gpu.dnaReadback, 0, byteLength);
+      device.queue.submit([encoder.finish()]);
+      await gpu.dnaReadback.mapAsync(GPUMapMode.READ, 0, byteLength);
+      const genome = new Float32Array(gpu.dnaReadback.getMappedRange(0, byteLength).slice(0));
+      gpu.dnaReadback.unmap();
+      return genome;
+    }
+
+    function writeEvaluationParams(count, candidateCount) {
+      const data = new ArrayBuffer(64);
+      const view = new DataView(data);
+      view.setUint32(0, count, true);
+      view.setUint32(4, candidateCount, true);
+      view.setUint32(28, candidateCount, true);
+      writeFocusParams(view);
+      device.queue.writeBuffer(gpu.paramsBuffer, 0, data);
+    }
+
+    function submitDecimationEvaluation(candidateCount, triangleCount, readbackBuffer, includePreview = false) {
+      const candidateCounts = new Uint32Array(candidateCount);
+      candidateCounts.fill(triangleCount);
+      device.queue.writeBuffer(gpu.candidateCountsBuffer, 0, candidateCounts);
+      writeEvaluationParams(triangleCount, candidateCount);
+
+      const encoder = device.createCommandEncoder({ label: "score simplified genome candidates" });
+      encoder.clearBuffer(gpu.scoreBuffer, 0, candidateCount * 4);
+      const renderPass = encoder.beginRenderPass({
+        label: "rasterize simplification candidates",
+        colorAttachments: [{
+          view: gpu.candidateAtlas.createView(),
+          loadOp: "clear",
+          storeOp: "store",
+          clearValue: { r: 1, g: 1, b: 1, a: 1 }
+        }]
+      });
+      renderPass.setPipeline(gpu.rasterPipeline);
+      renderPass.setBindGroup(0, gpu.rasterGroup);
+      for (let localIndex = 0; localIndex < candidateCount; localIndex += 1) {
+        const x = (localIndex % ATLAS_COLUMNS) * SIZE;
+        const y = Math.floor(localIndex / ATLAS_COLUMNS) * SIZE;
+        renderPass.setViewport(x, y, SIZE, SIZE, 0, 1);
+        renderPass.setScissorRect(x, y, SIZE, SIZE);
+        renderPass.draw(MAX_TRIANGLES * 3, 1, 0, localIndex);
+      }
+      renderPass.end();
+
+      const evaluatePass = encoder.beginComputePass({ label: "score simplification candidates" });
+      evaluatePass.setPipeline(gpu.evaluatePipeline);
+      evaluatePass.setBindGroup(0, gpu.evaluateGroup);
+      evaluatePass.dispatchWorkgroups(Math.ceil(SIZE / 8), Math.ceil(SIZE / 8), candidateCount);
+      evaluatePass.end();
+      encoder.copyBufferToBuffer(gpu.scoreBuffer, 0, readbackBuffer, 0, candidateCount * 4);
+      if (includePreview) {
+        encoder.copyTextureToBuffer(
+          { texture: gpu.candidateAtlas },
+          { buffer: gpu.imageReadback, bytesPerRow: IMAGE_BYTES_PER_ROW, rowsPerImage: SIZE },
+          [SIZE, SIZE]
+        );
+      }
+      device.queue.submit([encoder.finish()]);
+    }
+
+    async function mapDecimationImage() {
+      const paddedImage = new Uint8Array(gpu.imageReadback.getMappedRange().slice(0));
+      const image = new Uint8ClampedArray(SIZE * SIZE * 4);
+      for (let row = 0; row < SIZE; row += 1) {
+        image.set(paddedImage.subarray(row * IMAGE_BYTES_PER_ROW, row * IMAGE_BYTES_PER_ROW + SIZE * 4), row * SIZE * 4);
+      }
+      return image;
+    }
+
+    async function simplifyGenome() {
+      if (!gpu?.ready || !Number.isFinite(bestError) || gpu.count < 2 || decimationBusy || decimationPreview) return;
+      resumeAfterDecimation = running;
+      setRunning(false);
+      decimationBusy = true;
+      document.querySelector("#decimateSummary").textContent = "Pausing evolution and analyzing triangle impact…";
+      syncDecimationControls();
+      try {
+        await waitForEvolutionToStop();
+        if (!gpu?.ready) throw new Error("The GPU is not ready to simplify the current genome.");
+
+        const originalCount = gpu.count;
+        const originalError = bestError;
+        const genome = await readBestGenome();
+        const floatsPerCandidate = MAX_TRIANGLES * 12;
+        const variants = new Float32Array(originalCount * floatsPerCandidate);
+        for (let removedIndex = 0; removedIndex < originalCount; removedIndex += 1) {
+          const offset = removedIndex * floatsPerCandidate;
+          variants.set(genome.subarray(0, removedIndex * 12), offset);
+          variants.set(genome.subarray((removedIndex + 1) * 12), offset + removedIndex * 12);
+        }
+
+        document.querySelector("#decimateSummary").textContent = `Scoring ${originalCount} leave-one-triangle-out variants…`;
+        device.queue.writeBuffer(gpu.candidateBuffer, 0, variants);
+        submitDecimationEvaluation(
+          originalCount,
+          originalCount - 1,
+          gpu.decimationScoreReadback
+        );
+        await gpu.decimationScoreReadback.mapAsync(GPUMapMode.READ);
+        const scores = new Uint32Array(gpu.decimationScoreReadback.getMappedRange(0, originalCount * 4).slice(0));
+        gpu.decimationScoreReadback.unmap();
+
+        const requestedRemovalCount = Math.min(
+          originalCount - 1,
+          Math.max(1, Math.round(originalCount * Number(decimateRange.value) / 100))
+        );
+        const ranked = Array.from(scores, (score, index) => ({ score, index }));
+        ranked.sort((a, b) => a.score - b.score);
+        const removed = new Set(ranked.slice(0, requestedRemovalCount).map(({ index }) => index));
+        const simplified = new Float32Array((originalCount - removed.size) * 12);
+        let destination = 0;
+        for (let index = 0; index < originalCount; index += 1) {
+          if (removed.has(index)) continue;
+          simplified.set(genome.subarray(index * 12, index * 12 + 12), destination);
+          destination += 12;
+        }
+
+        device.queue.writeBuffer(gpu.candidateBuffer, 0, simplified);
+        submitDecimationEvaluation(1, simplified.length / 12, gpu.scoreReadback, true);
+        await Promise.all([
+          gpu.scoreReadback.mapAsync(GPUMapMode.READ),
+          gpu.imageReadback.mapAsync(GPUMapMode.READ)
+        ]);
+        const simplifiedScore = new Uint32Array(gpu.scoreReadback.getMappedRange(0, 4))[0];
+        const image = await mapDecimationImage();
+        gpu.scoreReadback.unmap();
+        gpu.imageReadback.unmap();
+        const simplifiedError = simplifiedScore / (SIZE * SIZE * 4 * 10000);
+
+        decimationPreview = {
+          genome: simplified,
+          count: simplified.length / 12,
+          score: simplifiedScore,
+          error: simplifiedError,
+          originalError
+        };
+        resultContext.putImageData(new ImageData(image, SIZE, SIZE), 0, 0);
+        document.querySelector("#resultEmpty").hidden = true;
+        document.querySelector("#fitnessValue").textContent = simplifiedError.toFixed(4);
+        document.querySelector("#fitnessNote").textContent = "Simplification preview; lower is better";
+        document.querySelector("#improvementStat").textContent = "—";
+        document.querySelector("#liveTriangleStat").textContent = String(decimationPreview.count);
+        document.querySelector("#triangleValue").textContent = String(decimationPreview.count);
+        document.querySelector("#footerTriangleCount").textContent = String(decimationPreview.count);
+        triangleRange.value = String(decimationPreview.count);
+        updateGenomeSize(decimationPreview.count);
+        const fitnessChange = originalError > 0
+          ? ((simplifiedError - originalError) / originalError) * 100
+          : (simplifiedError === 0 ? 0 : Infinity);
+        const changeLabel = Number.isFinite(fitnessChange) ? `${fitnessChange >= 0 ? "+" : ""}${fitnessChange.toFixed(1)}%` : "increased";
+        document.querySelector("#decimateSummary").textContent =
+          `Preview: ${originalCount} → ${decimationPreview.count} triangles (${removed.size} removed). ` +
+          `Error: ${originalError.toFixed(4)} → ${simplifiedError.toFixed(4)} (${changeLabel}).`;
+        document.querySelector("#decimateReview").hidden = false;
+        syncDecimationControls();
+        setNotice("Review the simplified image. Keep it to continue evolving from this genome, or discard it to restore the previous result.");
+      } catch (error) {
+        console.error(error);
+        document.querySelector("#decimateSummary").textContent = "Simplification could not be completed; the current genome was not changed.";
+        setNotice(`Could not simplify the genome: ${error instanceof Error ? error.message : String(error)}`, true);
+      } finally {
+        decimationBusy = false;
+        syncDecimationControls();
+        if (!decimationPreview) resumeEvolutionAfterDecimation();
+      }
+    }
+
+    function resumeEvolutionAfterDecimation() {
+      const shouldResume = resumeAfterDecimation;
+      resumeAfterDecimation = false;
+      if (shouldResume) setRunning(true);
+    }
+
+    function keepSimplification() {
+      if (!decimationPreview || decimationBusy || !gpu?.ready) return;
+      const preview = decimationPreview;
+      try {
+        device.queue.writeBuffer(gpu.bestBuffer, 0, preview.genome);
+        device.queue.writeBuffer(gpu.bestCountBuffer, 0, new Uint32Array([preview.count]));
+        device.queue.writeBuffer(gpu.bestScoreBuffer, 0, new Uint32Array([preview.score]));
+      } catch (error) {
+        console.error(error);
+        setNotice(`Could not keep the simplified genome: ${error instanceof Error ? error.message : String(error)}`, true);
+        return;
+      }
+      gpu.count = preview.count;
+      gpu.importedGenome = true;
+      gpu.hasGuidance = false;
+      pendingGenome = preview.genome.slice();
+      generation = 0;
+      bestError = preview.error;
+      initialError = preview.error;
+      generationTimes = [];
+      candidateRates = [];
+      candidateEvaluations = 0;
+      lastReportTime = 0;
+      lastReportGeneration = 0;
+      lastReportCandidateEvaluations = 0;
+      document.querySelector("#generationStat").textContent = "0";
+      document.querySelector("#improvementStat").textContent = "0.0%";
+      document.querySelector("#progressFill").style.width = "0%";
+      document.querySelector("#fitnessValue").textContent = preview.error.toFixed(4);
+      document.querySelector("#fitnessNote").textContent = "Fitness after simplification";
+      document.querySelector("#liveTriangleStat").textContent = String(preview.count);
+      document.querySelector("#triangleValue").textContent = String(preview.count);
+      document.querySelector("#footerTriangleCount").textContent = String(preview.count);
+      triangleRange.value = String(preview.count);
+      updateGenomeSize(preview.count);
+      decimationPreview = null;
+      document.querySelector("#decimateReview").hidden = true;
+      document.querySelector("#decimateSummary").textContent = `Kept the simplified genome with ${preview.count} triangles.`;
+      syncDecimationControls();
+      setNotice("Simplified genome kept. Evolution will continue from it when started.");
+      resumeEvolutionAfterDecimation();
+    }
+
+    async function discardSimplification() {
+      if (!decimationPreview || decimationBusy || !gpu?.ready) return;
+      decimationBusy = true;
+      syncDecimationControls();
+      try {
+        await updatePreview();
+        decimationPreview = null;
+        document.querySelector("#decimateReview").hidden = true;
+        document.querySelector("#decimateSummary").textContent = "Simplification discarded; the previous genome is restored.";
+        setNotice("The original genome and image have been restored.");
+      } catch (error) {
+        console.error(error);
+        setNotice(`Could not restore the previous preview: ${error instanceof Error ? error.message : String(error)}`, true);
+      } finally {
+        decimationBusy = false;
+        syncDecimationControls();
+        if (!decimationPreview) resumeEvolutionAfterDecimation();
+      }
     }
 
     function improvementPercent() {
@@ -1185,13 +1617,15 @@
     }
 
     function setRunning(value) {
+      if (decimationBusy || decimationPreview) return;
       running = value;
-      triangleRange.disabled = value;
       runButton.innerHTML = value ? "Ⅱ &nbsp; Pause evolution" : "▶ &nbsp; Start evolution";
+      syncDecimationControls();
       if (value) evolve();
     }
 
     async function resetEvolution() {
+      if (decimationBusy || decimationPreview) return;
       setRunning(false);
       if (gpu) gpu.ready = false;
       await waitForEvolutionToStop();
@@ -1388,6 +1822,27 @@
       stopCamera();
       await targetReady().catch(reportError);
     });
+    selectionOverlay.addEventListener("pointerdown", (event) => {
+      if (!targetLoaded || decimationBusy || decimationPreview || event.button !== 0) return;
+      event.preventDefault();
+      selectionPointerId = event.pointerId;
+      selectionStart = normalizedSelectionPoint(event);
+      updateDraftFocusRegion(selectionStart);
+      selectionOverlay.setPointerCapture(event.pointerId);
+    });
+    selectionOverlay.addEventListener("pointermove", (event) => {
+      if (selectionPointerId === event.pointerId && selectionStart) {
+        updateDraftFocusRegion(normalizedSelectionPoint(event));
+      }
+    });
+    selectionOverlay.addEventListener("pointerup", (event) => finishFocusSelection(event, true));
+    selectionOverlay.addEventListener("pointercancel", (event) => finishFocusSelection(event, false));
+    document.querySelector("#clearFocusButton").addEventListener("click", () => {
+      focusRegion = null;
+      draftFocusRegion = null;
+      syncDecimationControls();
+      setNotice("Focus area cleared. Guided mutations will sample across the whole image.");
+    });
     runButton.addEventListener("click", () => setRunning(!running));
     resetButton.addEventListener("click", resetEvolution);
     triangleRange.addEventListener("input", updateControlLabels);
@@ -1405,6 +1860,13 @@
     });
     mutationRange.addEventListener("input", updateControlLabels);
     structureRange.addEventListener("input", updateControlLabels);
+    decimateRange.addEventListener("input", updateControlLabels);
+    focusRange.addEventListener("input", () => {
+      document.querySelector("#focusValue").textContent = `${focusRange.value}%`;
+    });
+    document.querySelector("#decimateButton").addEventListener("click", simplifyGenome);
+    document.querySelector("#keepDecimationButton").addEventListener("click", keepSimplification);
+    document.querySelector("#discardDecimationButton").addEventListener("click", discardSimplification);
     document.querySelector("#saveImageButton").addEventListener("click", () => {
       resultCanvas.toBlob((blob) => {
         if (blob) downloadBlob(blob, `${safeFilename(selectedImageName)}-evolved.png`);
