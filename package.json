@@ -1,0 +1,9 @@
+{
+  "name": "webgpu-image-evolution",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A WebGPU-powered triangle image evolution experiment",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

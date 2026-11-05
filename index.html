@@ -1,0 +1,1426 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10110f">
+  <title>Form &amp; Signal — Image Evolution</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #10110f;
+      --panel: #181a17;
+      --panel-soft: #1d201c;
+      --line: #30342e;
+      --muted: #9ca398;
+      --text: #f0f1e9;
+      --lime: #d7fb73;
+      --lime-dark: #9bbd43;
+      --orange: #ed9c6a;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(ellipse at 75% -15%, rgba(128, 151, 81, .11), transparent 42%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .shell { max-width: 1440px; margin: 0 auto; padding: 28px clamp(18px, 4vw, 58px) 40px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 27px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { display: grid; width: 35px; height: 35px; place-items: center; border: 1px solid #59634a; border-radius: 50%; color: var(--lime); font-size: 19px; }
+    .brand-name { font-size: 13px; font-weight: 720; letter-spacing: .14em; text-transform: uppercase; }
+    .brand-sub { margin-top: 3px; color: var(--muted); font-size: 11px; letter-spacing: .04em; }
+    .gpu-status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #74796f; }
+    .gpu-status.ready .status-dot { background: var(--lime); box-shadow: 0 0 12px rgba(215, 251, 115, .45); }
+    .gpu-status.error .status-dot { background: var(--orange); }
+
+    .intro { display: flex; justify-content: space-between; align-items: end; gap: 24px; padding: 32px 0 25px; }
+    .eyebrow { color: var(--lime); font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { margin: 9px 0 0; font-size: clamp(26px, 4vw, 42px); font-weight: 540; letter-spacing: -.045em; line-height: 1.07; }
+    .intro p { max-width: 470px; margin: 0 0 3px; color: var(--muted); font-size: 13px; line-height: 1.65; }
+
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 316px; gap: 18px; align-items: start; }
+    .visual-panel, .control-panel { border: 1px solid var(--line); border-radius: 9px; background: rgba(24, 26, 23, .9); }
+    .visual-panel { padding: clamp(14px, 2.2vw, 24px); }
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(12px, 2vw, 22px); }
+    .image-card { min-width: 0; }
+    .image-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .image-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; }
+    .image-index { color: #788073; font-size: 10px; font-weight: 600; }
+    .image-tag { color: #7e8678; font-size: 10px; }
+    .canvas-wrap { position: relative; overflow: hidden; aspect-ratio: 1; border: 1px solid #33372f; border-radius: 5px; background-color: #121410; background-image: linear-gradient(45deg, #1a1c18 25%, transparent 25%), linear-gradient(-45deg, #1a1c18 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1c18 75%), linear-gradient(-45deg, transparent 75%, #1a1c18 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+    .canvas-wrap canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .empty-note { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; color: #7f8679; font-size: 12px; text-align: center; line-height: 1.6; pointer-events: none; }
+    .compare-caption { display: flex; justify-content: space-between; gap: 10px; margin-top: 9px; color: #7e8678; font-size: 10px; }
+
+    .fitness { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 21px; padding: 15px 16px; border: 1px solid #33372f; border-radius: 6px; background: #141612; }
+    .fitness-label { color: var(--muted); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+    .fitness-value { margin-top: 5px; font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 550; letter-spacing: -.03em; }
+    .fitness-note { color: #858c7e; font-size: 11px; text-align: right; line-height: 1.55; }
+    .progress-track { height: 3px; margin-top: 13px; overflow: hidden; border-radius: 3px; background: #2a2d27; }
+    .progress-fill { width: 0; height: 100%; background: var(--lime); transition: width .3s ease; }
+
+    .control-panel { padding: 18px; }
+    .section-label { color: #a4aa9c; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+    .source-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .button { display: inline-flex; min-height: 37px; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; border: 1px solid #42473e; border-radius: 5px; background: #22251f; color: #e8ebdf; font-size: 11px; font-weight: 620; cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
+    .button:hover { border-color: #6b755b; background: #2a2e25; }
+    .button:active { transform: translateY(1px); }
+    .button:disabled { opacity: .45; cursor: not-allowed; }
+    .button.primary { border-color: var(--lime); background: var(--lime); color: #1c2112; }
+    .button.primary:hover { background: #e3ff9e; }
+    .button.ghost { background: transparent; }
+    .button.wide { width: 100%; }
+    .hidden-input { display: none; }
+    .toon-input { display: block; width: 100%; min-height: 92px; margin-top: 10px; padding: 9px 10px; resize: vertical; border: 1px solid #42473e; border-radius: 5px; background: #121410; color: #e8ebdf; font: 10px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .toon-input::placeholder { color: #777e72; }
+    .camera-wrap { margin-top: 10px; }
+    .camera-wrap video { display: none; width: 100%; margin-top: 8px; border-radius: 4px; background: #0a0b09; }
+    .camera-wrap video.active { display: block; }
+    .divider { height: 1px; margin: 19px 0; background: var(--line); }
+    .setting { margin-top: 16px; }
+    .setting-head { display: flex; justify-content: space-between; gap: 12px; color: #dce0d4; font-size: 11px; }
+    .setting-value { color: var(--lime); font-variant-numeric: tabular-nums; }
+    .setting-help { margin-top: 6px; color: #858c7e; font-size: 9px; line-height: 1.5; }
+    input[type="range"] { width: 100%; height: 3px; margin: 13px 0 3px; appearance: none; border-radius: 3px; background: #41463b; cursor: pointer; }
+    input[type="range"]::-webkit-slider-thumb { width: 12px; height: 12px; appearance: none; border: 2px solid #20241b; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
+    input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border: 2px solid #20241b; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
+    .range-hints { display: flex; justify-content: space-between; color: #737a6f; font-size: 9px; }
+    .run-actions { display: grid; grid-template-columns: 1fr 42px; gap: 8px; margin-top: 19px; }
+    .icon-button { padding: 0; font-size: 15px; }
+    .export-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 10px; }
+    .stat-label { color: #81887c; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+    .stat-value { margin-top: 4px; color: #eef0e7; font-size: 14px; font-variant-numeric: tabular-nums; }
+    .stat-detail { margin-top: 3px; color: #81887c; font-size: 9px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+    .notice { min-height: 35px; margin-top: 14px; color: #899081; font-size: 10px; line-height: 1.5; }
+    .notice.error { color: #f0a27b; }
+    .camera-capture { display: none; width: 100%; margin-top: 8px; }
+    .camera-capture.active { display: inline-flex; }
+    footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 17px; color: #737a70; font-size: 10px; line-height: 1.5; }
+    footer span:last-child { text-align: right; }
+
+    @media (max-width: 850px) {
+      .workspace { grid-template-columns: minmax(0, 1fr) 270px; gap: 12px; }
+      .control-panel { padding: 15px; }
+      .intro p { max-width: 360px; }
+    }
+    @media (max-width: 680px) {
+      .shell { padding-top: 17px; }
+      .intro { display: block; padding: 25px 0 20px; }
+      .intro p { margin-top: 12px; }
+      .workspace { grid-template-columns: 1fr; }
+      .control-panel { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
+      .control-panel > .source-block, .control-panel > .divider, .control-panel > .stats-block, .control-panel > .notice { grid-column: 1 / -1; }
+      .control-panel > .settings-block { grid-column: 1; }
+      .control-panel > .action-block { grid-column: 2; grid-row: 3; align-self: end; }
+      .control-panel > .stats-block { grid-row: 4; }
+      .control-panel > .notice { grid-row: 5; }
+      .divider { margin: 15px 0; }
+      footer { font-size: 9px; }
+    }
+    @media (max-width: 440px) {
+      .compare { gap: 9px; }
+      .image-title { font-size: 9px; }
+      .image-tag { font-size: 9px; }
+      .fitness { padding: 12px; }
+      .fitness-value { font-size: 17px; }
+      .control-panel { display: block; }
+      .control-panel > .action-block { margin-top: 18px; }
+      .control-panel > .stats-block { margin-top: 19px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">△</div>
+        <div>
+          <div class="brand-name">Form &amp; Signal</div>
+          <div class="brand-sub">An experiment in evolving images</div>
+        </div>
+      </div>
+      <div id="gpuStatus" class="gpu-status"><span class="status-dot"></span><span id="gpuStatusText">Checking WebGPU</span></div>
+    </header>
+
+    <section class="intro">
+      <div>
+        <div class="eyebrow">Generative study / 001</div>
+        <h1>Let the image<br>find its own form.</h1>
+      </div>
+      <p>Evolutionary search, rendered on your GPU. A population of translucent triangles competes to recreate the image, one tiny mutation at a time.</p>
+    </section>
+
+    <section class="workspace" aria-label="Image evolution workspace">
+      <div class="visual-panel">
+        <div class="compare">
+          <div class="image-card">
+            <div class="image-heading"><div class="image-title"><span class="image-index">01</span> Target</div><span class="image-tag">REFERENCE</span></div>
+            <div class="canvas-wrap">
+              <canvas id="targetCanvas" width="160" height="160" aria-label="Target image"></canvas>
+              <div id="targetEmpty" class="empty-note">Choose an image, capture a frame,<br>or try the sample artwork.</div>
+            </div>
+          </div>
+          <div class="image-card">
+            <div class="image-heading"><div class="image-title"><span class="image-index">02</span> Evolved</div><span class="image-tag">BEST CANDIDATE</span></div>
+            <div class="canvas-wrap">
+              <canvas id="resultCanvas" width="160" height="160" aria-label="Best evolved image"></canvas>
+              <div id="resultEmpty" class="empty-note">Your best candidate<br>will appear here.</div>
+            </div>
+          </div>
+        </div>
+        <div class="fitness">
+          <div>
+            <div class="fitness-label">Best multi-scale error</div>
+            <div id="fitnessValue" class="fitness-value">—</div>
+          </div>
+          <div id="fitnessNote" class="fitness-note">Lower is closer<br>to the target</div>
+        </div>
+        <div class="progress-track" aria-label="Evolution progress"><div id="progressFill" class="progress-fill"></div></div>
+        <div class="compare-caption"><span>Evolution runs locally in your browser</span><span id="resolutionCaption">160 × 160 working resolution</span></div>
+      </div>
+
+      <aside class="control-panel">
+        <div class="source-block">
+          <div class="section-label">01 / Choose a target</div>
+          <div class="source-actions">
+            <button id="uploadButton" class="button" type="button">↑ &nbsp; Upload image</button>
+            <button id="sampleButton" class="button" type="button">✳ &nbsp; Try sample</button>
+          </div>
+          <input id="imageInput" class="hidden-input" type="file" accept="image/*">
+          <div class="camera-wrap">
+            <button id="cameraButton" class="button ghost wide" type="button">◎ &nbsp; Use camera</button>
+            <video id="cameraVideo" playsinline autoplay muted></video>
+            <button id="captureButton" class="button primary camera-capture" type="button">Capture frame as target</button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="toon-block">
+          <div class="section-label">02 / Load a TOON genome</div>
+          <input id="toonFileInput" class="hidden-input" type="file" accept=".toon,.txt,text/plain">
+          <div class="source-actions">
+            <button id="toonUploadButton" class="button" type="button">↑ &nbsp; Upload .toon</button>
+            <button id="toonImportButton" class="button" type="button">↥ &nbsp; Use pasted DNA</button>
+          </div>
+          <textarea id="toonText" class="toon-input" spellcheck="false" aria-label="Paste TOON genome" placeholder="Paste exported TOON DNA here…&#10;format: form-signal-dna&#10;version: 1&#10;triangles[32]{ax,ay,bx,by,cx,cy,r,g,b,opacity}:"></textarea>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="settings-block">
+          <div class="section-label">03 / Set the genome</div>
+          <div class="setting">
+            <div class="setting-head"><label for="triangleRange">Starting triangle count</label><span id="triangleValue" class="setting-value">128</span></div>
+            <input id="triangleRange" type="range" min="1" max="512" step="1" value="128">
+            <div class="range-hints"><span>1 / simpler</span><span>512 / detailed</span></div>
+            <div class="setting-help">The genome can randomly add or remove triangles while evolving. Pause to set a new starting count.</div>
+          </div>
+          <div class="setting">
+            <div class="setting-head"><label for="mutationRange">Mutation strength</label><span id="mutationValue" class="setting-value">0.35</span></div>
+            <input id="mutationRange" type="range" min="1" max="90" step="1" value="35">
+            <div class="range-hints"><span>0.01 / tiny</span><span>0.90 / bold</span></div>
+            <div class="setting-help">Scales position, color, and opacity edits.</div>
+          </div>
+          <div class="setting">
+            <div class="setting-head"><label for="structureRange">Add / remove chance</label><span id="structureValue" class="setting-value">2.5%</span></div>
+            <input id="structureRange" type="range" min="0" max="20" step="0.5" value="2.5">
+            <div class="range-hints"><span>0% / never</span><span>20% / frequent</span></div>
+            <div class="setting-help">Chance per candidate to add or remove one triangle. Updates live while evolving.</div>
+          </div>
+          <div class="setting">
+            <div class="setting-head"><label for="populationRange">Candidates per generation</label><span id="populationValue" class="setting-value">16</span></div>
+            <input id="populationRange" type="range" min="2" max="2048" step="2" value="16">
+            <div class="range-hints"><span>2 / faster</span><span>2,048 / broader search</span></div>
+            <div class="setting-help">Adjusts live. Larger batches explore more candidates but use more GPU time; reduce them if the page becomes sluggish.</div>
+          </div>
+        </div>
+
+        <div class="action-block">
+          <div class="section-label">04 / Evolve</div>
+          <div class="run-actions">
+            <button id="runButton" class="button primary" type="button" disabled>▶ &nbsp; Start evolution</button>
+            <button id="resetButton" class="button icon-button" type="button" title="Reset evolution" aria-label="Reset evolution" disabled>↺</button>
+          </div>
+          <div class="export-actions">
+            <button id="saveImageButton" class="button ghost" type="button" disabled>↓ &nbsp; Image</button>
+            <button id="saveDnaButton" class="button ghost" type="button" disabled>↓ &nbsp; TOON</button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="stats-block">
+          <div class="section-label">Live statistics</div>
+          <div class="stats" style="margin-top: 14px">
+            <div><div class="stat-label">Generation</div><div id="generationStat" class="stat-value">0</div></div>
+            <div><div class="stat-label">Improvement</div><div id="improvementStat" class="stat-value">—</div></div>
+            <div><div class="stat-label">Live triangles</div><div id="liveTriangleStat" class="stat-value">128</div><div id="genomeStat" class="stat-detail">6.0 KB DNA</div></div>
+            <div><div class="stat-label">Candidates / sec</div><div id="rateStat" class="stat-value">—</div><div id="rateDetail" class="stat-detail">—</div></div>
+          </div>
+        </div>
+        <div id="notice" class="notice" role="status">WebGPU is required. Use a recent Chrome or Edge on HTTPS or localhost.</div>
+      </aside>
+    </section>
+
+    <footer><span>One genome · <span id="footerTriangleCount">128</span> triangles · alpha-blended primitives</span><span>Fitness and mutation run on the GPU; only periodic previews are read back.</span></footer>
+  </main>
+
+  <script type="module">
+    const SIZE = 160;
+    const IMAGE_BYTES_PER_ROW = Math.ceil(SIZE * 4 / 256) * 256;
+    const REPORT_EVERY = 5;
+    const MAX_POPULATION = 2048;
+    const MAX_TRIANGLES = 512;
+    const CANDIDATE_BATCH_SIZE = 512;
+    const ATLAS_COLUMNS = 23;
+    const ATLAS_ROWS = Math.ceil(CANDIDATE_BATCH_SIZE / ATLAS_COLUMNS);
+    const targetCanvas = document.querySelector("#targetCanvas");
+    const resultCanvas = document.querySelector("#resultCanvas");
+    const targetContext = targetCanvas.getContext("2d", { willReadFrequently: true });
+    const resultContext = resultCanvas.getContext("2d");
+    const imageInput = document.querySelector("#imageInput");
+    const runButton = document.querySelector("#runButton");
+    const resetButton = document.querySelector("#resetButton");
+    const notice = document.querySelector("#notice");
+    const gpuStatus = document.querySelector("#gpuStatus");
+    const gpuStatusText = document.querySelector("#gpuStatusText");
+    const triangleRange = document.querySelector("#triangleRange");
+    const mutationRange = document.querySelector("#mutationRange");
+    const structureRange = document.querySelector("#structureRange");
+    const populationRange = document.querySelector("#populationRange");
+    const toonText = document.querySelector("#toonText");
+    const toonFileInput = document.querySelector("#toonFileInput");
+
+    const mutationShader = `
+      struct Triangle { a: vec4f, b: vec4f, c: vec4f };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, padding0: u32, padding1: u32, padding2: u32 };
+      const MAX_TRIANGLES: u32 = 512u;
+      @group(0) @binding(0) var<storage, read_write> candidate: array<Triangle>;
+      @group(0) @binding(1) var<storage, read> best: array<Triangle>;
+      @group(0) @binding(2) var<uniform> params: Params;
+      @group(0) @binding(3) var<storage, read_write> bestCount: array<atomic<u32>>;
+      @group(0) @binding(4) var<storage, read_write> candidateCounts: array<u32>;
+      @group(0) @binding(5) var<storage, read> errorMap: array<f32>;
+      @group(0) @binding(6) var targetImage: texture_2d<f32>;
+
+      fn random01(value: u32) -> f32 {
+        var x = value ^ (value >> 16u);
+        x = x * 0x7feb352du;
+        x = x ^ (x >> 15u);
+        x = x * 0x846ca68bu;
+        x = x ^ (x >> 16u);
+        return f32(x) / 4294967295.0;
+      }
+
+      fn signedRandom(value: u32) -> f32 {
+        return random01(value) * 2.0 - 1.0;
+      }
+
+      @compute @workgroup_size(64)
+      fn main(@builtin(global_invocation_id) id: vec3u) {
+        let i = id.x;
+        let candidateIndex = params.batchStart + id.y;
+        if (i >= MAX_TRIANGLES || id.y >= params.batchCount) { return; }
+        let bufferIndex = candidateIndex * MAX_TRIANGLES + i;
+        let seed = params.seed + candidateIndex * 0x85ebca6bu + i * 0x9e3779b9u;
+        let currentCount = atomicLoad(&bestCount[0]);
+        var candidateCount = params.count;
+        let topologyChance = random01(params.seed + candidateIndex * 0x85ebca6bu + 0xa511e9b3u);
+        let topologyRoll = random01(params.seed + candidateIndex * 0x85ebca6bu + 0x63d83595u);
+        let topologyMutation = params.initial == 0u && topologyChance < params.structuralMutation;
+        if (params.initial == 0u) {
+          candidateCount = currentCount;
+          if (topologyMutation && (currentCount == 1u || (currentCount < MAX_TRIANGLES && topologyRoll < 0.5))) {
+            candidateCount = min(currentCount + 1u, MAX_TRIANGLES);
+          } else if (topologyMutation && currentCount > 1u) {
+            candidateCount = currentCount - 1u;
+          }
+        }
+        if (i == 0u) { candidateCounts[candidateIndex] = candidateCount; }
+        if (params.initial == 1u) {
+          if (i >= params.count) { return; }
+          let ax = random01(seed + 1u);
+          let ay = random01(seed + 2u);
+          let bx = random01(seed + 3u);
+          let by = random01(seed + 4u);
+          let cx = random01(seed + 5u);
+          let cy = random01(seed + 6u);
+          candidate[bufferIndex].a = vec4f(ax, ay, random01(seed + 7u), random01(seed + 8u));
+          candidate[bufferIndex].b = vec4f(bx, by, random01(seed + 9u), 0.15 + random01(seed + 10u) * 0.65);
+          candidate[bufferIndex].c = vec4f(cx, cy, 0.0, 0.0);
+          return;
+        }
+
+        if (i >= candidateCount) { return; }
+        let adding = params.initial == 0u && candidateCount > currentCount;
+        let removing = params.initial == 0u && candidateCount < currentCount;
+        let removedIndex = min(
+          u32(random01(params.seed + candidateIndex * 0x85ebca6bu + 0x1b56c4e9u) * f32(currentCount)),
+          currentCount - 1u
+        );
+        if (adding && i == currentCount) {
+          let ax = random01(seed + 1u);
+          let ay = random01(seed + 2u);
+          let bx = random01(seed + 3u);
+          let by = random01(seed + 4u);
+          let cx = random01(seed + 5u);
+          let cy = random01(seed + 6u);
+          candidate[bufferIndex].a = vec4f(ax, ay, random01(seed + 7u), random01(seed + 8u));
+          candidate[bufferIndex].b = vec4f(bx, by, random01(seed + 9u), 0.15 + random01(seed + 10u) * 0.65);
+          candidate[bufferIndex].c = vec4f(cx, cy, 0.0, 0.0);
+          return;
+        }
+        var sourceIndex = i;
+        if (removing && i >= removedIndex) { sourceIndex += 1u; }
+        var triangle = best[sourceIndex];
+        if (topologyMutation) {
+          candidate[bufferIndex] = triangle;
+          return;
+        }
+        if (params.initial == 2u && candidateIndex == 0u) {
+          candidate[bufferIndex] = triangle;
+          return;
+        }
+        let guidedIndex = candidateIndex % candidateCount;
+        if (params.initial == 0u && params.guideReady == 1u && i == guidedIndex && random01(seed + 32u) < 0.35) {
+          var hotspot = vec2u(0u);
+          var hotspotError = -1.0;
+          for (var attempt = 0u; attempt < 16u; attempt += 1u) {
+            let sampleSeed = seed + 40u + attempt * 2u;
+            let point = vec2u(
+              min(u32(random01(sampleSeed) * f32(textureDimensions(targetImage).x)), textureDimensions(targetImage).x - 1u),
+              min(u32(random01(sampleSeed + 1u) * f32(textureDimensions(targetImage).y)), textureDimensions(targetImage).y - 1u)
+            );
+            let error = errorMap[point.y * textureDimensions(targetImage).x + point.x];
+            if (error > hotspotError) {
+              hotspot = point;
+              hotspotError = error;
+            }
+          }
+          let center = (vec2f(hotspot) + vec2f(0.5)) / vec2f(textureDimensions(targetImage));
+          let radius = 0.008 + params.mutation * 0.045;
+          let angle = random01(seed + 80u) * 6.2831853;
+          let a = center + vec2f(cos(angle), sin(angle)) * radius;
+          let b = center + vec2f(cos(angle + 2.0943951), sin(angle + 2.0943951)) * radius;
+          let c = center + vec2f(cos(angle + 4.1887902), sin(angle + 4.1887902)) * radius;
+          let pigment = textureLoad(targetImage, vec2i(hotspot), 0).rgb;
+          triangle.a = vec4f(clamp(a, vec2f(0.0), vec2f(1.0)), pigment.r, pigment.g);
+          triangle.b = vec4f(clamp(b, vec2f(0.0), vec2f(1.0)), pigment.b, 0.55 + random01(seed + 81u) * 0.4);
+          triangle.c = vec4f(clamp(c, vec2f(0.0), vec2f(1.0)), 0.0, 0.0);
+          candidate[bufferIndex] = triangle;
+          return;
+        }
+        let chance = random01(seed + 11u);
+        if (chance < 0.085) {
+          let amount = params.mutation;
+          triangle.a.x = clamp(triangle.a.x + signedRandom(seed + 12u) * amount * 0.16, 0.0, 1.0);
+          triangle.a.y = clamp(triangle.a.y + signedRandom(seed + 13u) * amount * 0.16, 0.0, 1.0);
+          triangle.b.x = clamp(triangle.b.x + signedRandom(seed + 14u) * amount * 0.16, 0.0, 1.0);
+          triangle.b.y = clamp(triangle.b.y + signedRandom(seed + 15u) * amount * 0.16, 0.0, 1.0);
+          triangle.c.x = clamp(triangle.c.x + signedRandom(seed + 16u) * amount * 0.16, 0.0, 1.0);
+          triangle.c.y = clamp(triangle.c.y + signedRandom(seed + 17u) * amount * 0.16, 0.0, 1.0);
+        }
+        if (random01(seed + 18u) < 0.12) {
+          let amount = params.mutation * 0.22;
+          triangle.a.z = clamp(triangle.a.z + signedRandom(seed + 19u) * amount, 0.0, 1.0);
+          triangle.a.w = clamp(triangle.a.w + signedRandom(seed + 20u) * amount, 0.0, 1.0);
+          triangle.b.z = clamp(triangle.b.z + signedRandom(seed + 21u) * amount, 0.0, 1.0);
+        }
+        if (random01(seed + 22u) < 0.1) {
+          triangle.b.w = clamp(triangle.b.w + signedRandom(seed + 23u) * params.mutation * 0.25, 0.03, 0.9);
+        }
+        if (random01(seed + 24u) < 0.008) {
+          let point = random01(seed + 25u);
+          if (point < 0.333) {
+            triangle.a.x = random01(seed + 26u);
+            triangle.a.y = random01(seed + 27u);
+          } else if (point < 0.666) {
+            triangle.b.x = random01(seed + 28u);
+            triangle.b.y = random01(seed + 29u);
+          } else {
+            triangle.c.x = random01(seed + 30u);
+            triangle.c.y = random01(seed + 31u);
+          }
+        }
+        candidate[bufferIndex] = triangle;
+      }
+    `;
+
+    const evaluationShader = `
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, padding0: u32, padding1: u32, padding2: u32 };
+      const ATLAS_COLUMNS: u32 = 23u;
+      @group(0) @binding(0) var targetImage: texture_2d<f32>;
+      @group(0) @binding(1) var candidateAtlas: texture_2d<f32>;
+      @group(0) @binding(2) var<storage, read_write> score: array<atomic<u32>>;
+      @group(0) @binding(3) var<uniform> params: Params;
+      @group(0) @binding(4) var<storage, read> candidateCounts: array<u32>;
+
+      @compute @workgroup_size(8, 8)
+      fn main(@builtin(global_invocation_id) id: vec3u) {
+        let dims = textureDimensions(targetImage);
+        if (id.x >= dims.x || id.y >= dims.y || id.z >= params.batchCount) { return; }
+        let pixel = vec2u(id.xy);
+        let candidateIndex = params.batchStart + id.z;
+        let tile = vec2u(id.z % ATLAS_COLUMNS, id.z / ATLAS_COLUMNS) * dims;
+        let atlasPixel = vec2i(tile + pixel);
+        let fullDifference = textureLoad(candidateAtlas, atlasPixel, 0).rgb - textureLoad(targetImage, vec2i(pixel), 0).rgb;
+        var weightedError = dot(fullDifference, fullDifference);
+
+        if (pixel.x % 2u == 1u && pixel.y % 2u == 1u) {
+          let samplePixel = min((pixel / 2u) * 2u + vec2u(1u), dims - vec2u(1u));
+          let difference = textureLoad(candidateAtlas, vec2i(tile + samplePixel), 0).rgb - textureLoad(targetImage, vec2i(samplePixel), 0).rgb;
+          weightedError += dot(difference, difference) * 4.0;
+        }
+        if (pixel.x % 4u == 2u && pixel.y % 4u == 2u) {
+          let samplePixel = min((pixel / 4u) * 4u + vec2u(2u), dims - vec2u(1u));
+          let difference = textureLoad(candidateAtlas, vec2i(tile + samplePixel), 0).rgb - textureLoad(targetImage, vec2i(samplePixel), 0).rgb;
+          weightedError += dot(difference, difference) * 16.0;
+        }
+        if (pixel.x % 8u == 4u && pixel.y % 8u == 4u) {
+          let samplePixel = min((pixel / 8u) * 8u + vec2u(4u), dims - vec2u(1u));
+          let difference = textureLoad(candidateAtlas, vec2i(tile + samplePixel), 0).rgb - textureLoad(targetImage, vec2i(samplePixel), 0).rgb;
+          weightedError += dot(difference, difference) * 64.0;
+        }
+        atomicAdd(&score[candidateIndex], u32(round(weightedError * 10000.0)));
+      }
+    `;
+
+    const finalizeShader = `
+      struct Triangle { a: vec4f, b: vec4f, c: vec4f };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, padding0: u32, padding1: u32, padding2: u32 };
+      const MAX_TRIANGLES: u32 = 512u;
+      @group(0) @binding(0) var<storage, read> candidate: array<Triangle>;
+      @group(0) @binding(1) var<storage, read_write> best: array<Triangle>;
+      @group(0) @binding(2) var<storage, read_write> score: array<atomic<u32>>;
+      @group(0) @binding(3) var<storage, read_write> bestScore: array<atomic<u32>>;
+      @group(0) @binding(4) var<uniform> params: Params;
+      @group(0) @binding(5) var<storage, read> candidateCounts: array<u32>;
+      @group(0) @binding(6) var<storage, read_write> bestCount: array<atomic<u32>>;
+      @compute @workgroup_size(1)
+      fn main() {
+        var scoreToBeat = atomicLoad(&bestScore[0]);
+        for (var localIndex = 0u; localIndex < params.batchCount; localIndex += 1u) {
+          let candidateIndex = params.batchStart + localIndex;
+          let candidateScore = atomicLoad(&score[candidateIndex]);
+          if (candidateScore < scoreToBeat) {
+            let count = candidateCounts[candidateIndex];
+            for (var i = 0u; i < count; i += 1u) {
+              best[i] = candidate[candidateIndex * MAX_TRIANGLES + i];
+            }
+            scoreToBeat = candidateScore;
+            atomicStore(&bestScore[0], candidateScore);
+            atomicStore(&bestCount[0], count);
+          }
+        }
+      }
+    `;
+
+    const rasterShader = `
+      struct Triangle { a: vec4f, b: vec4f, c: vec4f };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, padding0: u32, padding1: u32, padding2: u32 };
+      const MAX_TRIANGLES: u32 = 512u;
+      @group(0) @binding(0) var<storage, read> candidate: array<Triangle>;
+      @group(0) @binding(1) var<storage, read> candidateCounts: array<u32>;
+      @group(0) @binding(2) var<uniform> params: Params;
+
+      struct VertexOutput {
+        @builtin(position) position: vec4f,
+        @location(0) color: vec3f,
+        @location(1) opacity: f32
+      };
+
+      @vertex
+      fn vertexMain(
+        @builtin(vertex_index) vertexIndex: u32,
+        @builtin(instance_index) localCandidate: u32
+      ) -> VertexOutput {
+        var output: VertexOutput;
+        output.color = vec3f(1.0);
+        output.opacity = 0.0;
+        let candidateIndex = params.batchStart + localCandidate;
+        let triangleIndex = vertexIndex / 3u;
+        if (triangleIndex >= candidateCounts[candidateIndex]) {
+          output.position = vec4f(2.0, 2.0, 0.0, 1.0);
+          return output;
+        }
+        let triangle = candidate[candidateIndex * MAX_TRIANGLES + triangleIndex];
+        var point = triangle.a.xy;
+        if (vertexIndex % 3u == 1u) { point = triangle.b.xy; }
+        if (vertexIndex % 3u == 2u) { point = triangle.c.xy; }
+        output.position = vec4f(point.x * 2.0 - 1.0, 1.0 - point.y * 2.0, 0.0, 1.0);
+        output.color = vec3f(triangle.a.z, triangle.a.w, triangle.b.z);
+        output.opacity = triangle.b.w;
+        return output;
+      }
+
+      @fragment
+      fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+        return vec4f(input.color, input.opacity);
+      }
+    `;
+
+    const renderShader = `
+      struct Triangle { a: vec4f, b: vec4f, c: vec4f };
+      @group(0) @binding(0) var<storage, read> best: array<Triangle>;
+      @group(0) @binding(1) var outputImage: texture_storage_2d<rgba8unorm, write>;
+      @group(0) @binding(3) var<storage, read_write> bestCount: array<atomic<u32>>;
+
+      fn insideTriangle(p: vec2f, a: vec2f, b: vec2f, c: vec2f) -> bool {
+        let v0 = c - a;
+        let v1 = b - a;
+        let v2 = p - a;
+        let dot00 = dot(v0, v0);
+        let dot01 = dot(v0, v1);
+        let dot02 = dot(v0, v2);
+        let dot11 = dot(v1, v1);
+        let dot12 = dot(v1, v2);
+        let denominator = dot00 * dot11 - dot01 * dot01;
+        if (abs(denominator) < 0.000001) { return false; }
+        let u = (dot11 * dot02 - dot01 * dot12) / denominator;
+        let v = (dot00 * dot12 - dot01 * dot02) / denominator;
+        return u >= 0.0 && v >= 0.0 && u + v <= 1.0;
+      }
+
+      @compute @workgroup_size(8, 8)
+      fn main(@builtin(global_invocation_id) id: vec3u) {
+        let dims = textureDimensions(outputImage);
+        if (id.x >= dims.x || id.y >= dims.y) { return; }
+        let p = (vec2f(id.xy) + vec2f(0.5)) / vec2f(dims);
+        var color = vec3f(1.0);
+        for (var i = 0u; i < atomicLoad(&bestCount[0]); i += 1u) {
+          let triangle = best[i];
+          if (insideTriangle(p, triangle.a.xy, triangle.b.xy, triangle.c.xy)) {
+            let alpha = triangle.b.w;
+            let pigment = vec3f(triangle.a.z, triangle.a.w, triangle.b.z);
+            color = pigment * alpha + color * (1.0 - alpha);
+          }
+        }
+        textureStore(outputImage, vec2i(id.xy), vec4f(color, 1.0));
+      }
+    `;
+
+    const guideShader = `
+      @group(0) @binding(0) var targetImage: texture_2d<f32>;
+      @group(0) @binding(1) var bestImage: texture_2d<f32>;
+      @group(0) @binding(2) var<storage, read_write> errorMap: array<f32>;
+
+      @compute @workgroup_size(8, 8)
+      fn main(@builtin(global_invocation_id) id: vec3u) {
+        let dims = textureDimensions(targetImage);
+        if (id.x >= dims.x || id.y >= dims.y) { return; }
+        let pixel = vec2i(id.xy);
+        let difference = textureLoad(targetImage, pixel, 0).rgb - textureLoad(bestImage, pixel, 0).rgb;
+        errorMap[id.y * dims.x + id.x] = dot(difference, difference);
+      }
+    `;
+
+    let adapter;
+    let device;
+    let gpu = null;
+    let generation = 0;
+    let bestError = Infinity;
+    let initialError = Infinity;
+    let running = false;
+    let targetLoaded = false;
+    let cameraStream = null;
+    let busy = false;
+    let lastReportTime = 0;
+    let lastReportGeneration = 0;
+    let generationTimes = [];
+    let candidateRates = [];
+    let candidateEvaluations = 0;
+    let lastReportCandidateEvaluations = 0;
+    let seed = Math.floor(Math.random() * 0xffffffff);
+    let selectedImageName = "sample";
+    let pendingGenome = null;
+
+    function setNotice(message, isError = false) {
+      notice.textContent = message;
+      notice.classList.toggle("error", isError);
+    }
+
+    function setGpuState(state, label) {
+      gpuStatus.classList.toggle("ready", state === "ready");
+      gpuStatus.classList.toggle("error", state === "error");
+      gpuStatusText.textContent = label;
+    }
+
+    function updateControlLabels() {
+      const count = Number(triangleRange.value);
+      document.querySelector("#triangleValue").textContent = count;
+      document.querySelector("#footerTriangleCount").textContent = count;
+      updateGenomeSize(count);
+      document.querySelector("#mutationValue").textContent = (Number(mutationRange.value) / 100).toFixed(2);
+      document.querySelector("#structureValue").textContent = `${Number(structureRange.value).toFixed(1)}%`;
+      document.querySelector("#populationValue").textContent = populationRange.value;
+    }
+
+    function updateGenomeSize(count) {
+      document.querySelector("#genomeStat").textContent = `${(count * 48 / 1024).toFixed(2)} KB DNA`;
+    }
+
+    function makeSample() {
+      const context = targetContext;
+      const gradient = context.createLinearGradient(0, 0, SIZE, SIZE);
+      gradient.addColorStop(0, "#b8c5a1");
+      gradient.addColorStop(.52, "#637b68");
+      gradient.addColorStop(1, "#253e46");
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, SIZE, SIZE);
+      context.fillStyle = "#e7bb78";
+      context.beginPath();
+      context.arc(119, 43, 21, 0, Math.PI * 2);
+      context.fill();
+      context.fillStyle = "#405c54";
+      context.beginPath();
+      context.moveTo(0, 112);
+      context.lineTo(39, 61);
+      context.lineTo(73, 110);
+      context.lineTo(112, 55);
+      context.lineTo(160, 113);
+      context.lineTo(160, 160);
+      context.lineTo(0, 160);
+      context.closePath();
+      context.fill();
+      context.fillStyle = "#29434a";
+      context.beginPath();
+      context.moveTo(0, 127);
+      context.lineTo(55, 91);
+      context.lineTo(95, 133);
+      context.lineTo(135, 92);
+      context.lineTo(160, 113);
+      context.lineTo(160, 160);
+      context.lineTo(0, 160);
+      context.closePath();
+      context.fill();
+      context.fillStyle = "#d5a676";
+      context.beginPath();
+      context.moveTo(0, 139);
+      context.quadraticCurveTo(48, 122, 91, 145);
+      context.quadraticCurveTo(126, 163, 160, 137);
+      context.lineTo(160, 160);
+      context.lineTo(0, 160);
+      context.fill();
+      selectedImageName = "sample";
+      targetReady().catch(reportError);
+    }
+
+    async function waitForEvolutionToStop() {
+      while (busy) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+
+    function disposeGpu() {
+      if (!gpu) return;
+      gpu.targetTexture.destroy();
+      gpu.outputTexture.destroy();
+      gpu.candidateAtlas.destroy();
+      gpu.candidateBuffer.destroy();
+      gpu.bestBuffer.destroy();
+      gpu.scoreBuffer.destroy();
+      gpu.bestScoreBuffer.destroy();
+      gpu.candidateCountsBuffer.destroy();
+      gpu.bestCountBuffer.destroy();
+      gpu.errorMapBuffer.destroy();
+      gpu.paramsBuffer.destroy();
+      gpu.scoreReadback.destroy();
+      gpu.countReadback.destroy();
+      gpu.imageReadback.destroy();
+      gpu.dnaReadback.destroy();
+      gpu = null;
+    }
+
+    async function targetReady() {
+      setRunning(false);
+      targetLoaded = true;
+      const count = Number(triangleRange.value);
+      document.querySelector("#targetEmpty").hidden = true;
+      document.querySelector("#resultEmpty").hidden = false;
+      resultContext.clearRect(0, 0, SIZE, SIZE);
+      document.querySelector("#fitnessValue").textContent = "—";
+      document.querySelector("#fitnessNote").innerHTML = "Lower is closer<br>to the target";
+      document.querySelector("#generationStat").textContent = "0";
+      document.querySelector("#liveTriangleStat").textContent = count;
+      document.querySelector("#improvementStat").textContent = "—";
+      document.querySelector("#rateStat").textContent = "—";
+      document.querySelector("#rateDetail").textContent = "—";
+      updateGenomeSize(count);
+      document.querySelector("#progressFill").style.width = "0%";
+      generation = 0;
+      bestError = Infinity;
+      initialError = Infinity;
+      generationTimes = [];
+      runButton.disabled = true;
+      resetButton.disabled = true;
+      document.querySelector("#saveImageButton").disabled = true;
+      document.querySelector("#saveDnaButton").disabled = true;
+      runButton.innerHTML = "▶ &nbsp; Start evolution";
+      if (gpu) gpu.ready = false;
+      await waitForEvolutionToStop();
+      disposeGpu();
+      if (device) await initializeEvolution();
+      else await initializeGpu();
+    }
+
+    function drawSourceCover(source) {
+      targetContext.clearRect(0, 0, SIZE, SIZE);
+      const width = source.videoWidth || source.naturalWidth || source.width;
+      const height = source.videoHeight || source.naturalHeight || source.height;
+      const scale = Math.max(SIZE / width, SIZE / height);
+      const drawWidth = width * scale;
+      const drawHeight = height * scale;
+      targetContext.drawImage(source, (SIZE - drawWidth) / 2, (SIZE - drawHeight) / 2, drawWidth, drawHeight);
+    }
+
+    async function loadImageFile(file) {
+      if (!file || !file.type.startsWith("image/")) {
+        setNotice("Choose a supported image file.", true);
+        return;
+      }
+      try {
+        const bitmap = await createImageBitmap(file);
+        drawSourceCover(bitmap);
+        bitmap.close();
+        selectedImageName = file.name.replace(/\.[^.]+$/, "") || "image";
+        stopCamera();
+        await targetReady();
+      } catch (error) {
+        reportError(error);
+      }
+    }
+
+    function createBuffer(size, usage) {
+      return device.createBuffer({ size, usage });
+    }
+
+    function createPipeline(code, label) {
+      const module = device.createShaderModule({ code, label });
+      return device.createComputePipeline({ label, layout: "auto", compute: { module, entryPoint: "main" } });
+    }
+
+    function createRasterPipeline(code) {
+      const module = device.createShaderModule({ code, label: "rasterize candidate triangles" });
+      return device.createRenderPipeline({
+        label: "rasterize candidate triangles",
+        layout: "auto",
+        vertex: { module, entryPoint: "vertexMain" },
+        fragment: {
+          module,
+          entryPoint: "fragmentMain",
+          targets: [{
+            format: "rgba8unorm",
+            blend: {
+              color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
+              alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" }
+            }
+          }]
+        },
+        primitive: { topology: "triangle-list" }
+      });
+    }
+
+    async function initializeGpu() {
+      if (!navigator.gpu) {
+        setGpuState("error", "WebGPU unavailable");
+        setNotice("WebGPU is not available in this browser. Try a recent Chrome or Edge over HTTPS or localhost.", true);
+        return;
+      }
+      setGpuState("pending", "Requesting GPU");
+      adapter = await navigator.gpu.requestAdapter();
+      if (!adapter) {
+        setGpuState("error", "No compatible GPU");
+        setNotice("The browser could not find a WebGPU-compatible adapter.", true);
+        return;
+      }
+      device = await adapter.requestDevice();
+      device.lost.then((info) => {
+        gpu = null;
+        running = false;
+        setGpuState("error", "GPU device lost");
+        setNotice(`The GPU device was lost${info.message ? `: ${info.message}` : "."}`, true);
+      });
+      await initializeEvolution();
+    }
+
+    async function initializeEvolution() {
+      if (!device || !targetLoaded) return;
+      const count = Number(triangleRange.value);
+      const population = Number(populationRange.value);
+      const maxGenomeBytes = MAX_TRIANGLES * 48;
+      const candidateBytes = maxGenomeBytes * MAX_POPULATION;
+      if (pendingGenome && pendingGenome.length !== count * 12) {
+        throw new Error("The loaded TOON genome size does not match the triangle count control.");
+      }
+      const targetTexture = device.createTexture({
+        label: "target image",
+        size: [SIZE, SIZE],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+      });
+      device.queue.copyExternalImageToTexture(
+        { source: targetCanvas },
+        { texture: targetTexture },
+        [SIZE, SIZE]
+      );
+      const outputTexture = device.createTexture({
+        label: "best candidate render",
+        size: [SIZE, SIZE],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC
+      });
+      const candidateAtlas = device.createTexture({
+        label: "candidate render atlas",
+        size: [ATLAS_COLUMNS * SIZE, ATLAS_ROWS * SIZE],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+      });
+      const candidateBuffer = createBuffer(candidateBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
+      const bestBuffer = createBuffer(maxGenomeBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
+      const scoreBuffer = createBuffer(MAX_POPULATION * 4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
+      const bestScoreBuffer = createBuffer(4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
+      const candidateCountsBuffer = createBuffer(MAX_POPULATION * 4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
+      const bestCountBuffer = createBuffer(4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
+      const errorMapBuffer = createBuffer(SIZE * SIZE * 4, GPUBufferUsage.STORAGE);
+      const paramsBuffer = createBuffer(48, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+      const scoreReadback = createBuffer(4, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+      const countReadback = createBuffer(4, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+      const imageReadback = createBuffer(IMAGE_BYTES_PER_ROW * SIZE, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+      const dnaReadback = createBuffer(maxGenomeBytes, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+
+      const mutatePipeline = createPipeline(mutationShader, "mutate genome");
+      const evaluatePipeline = createPipeline(evaluationShader, "render and score candidate");
+      const finalizePipeline = createPipeline(finalizeShader, "keep best genome");
+      const renderPipeline = createPipeline(renderShader, "render best genome");
+      const guidePipeline = createPipeline(guideShader, "build residual error map");
+      const rasterPipeline = createRasterPipeline(rasterShader);
+
+      const mutateGroup = device.createBindGroup({
+        layout: mutatePipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: candidateBuffer } },
+          { binding: 1, resource: { buffer: bestBuffer } },
+          { binding: 2, resource: { buffer: paramsBuffer } },
+          { binding: 3, resource: { buffer: bestCountBuffer } },
+          { binding: 4, resource: { buffer: candidateCountsBuffer } },
+          { binding: 5, resource: { buffer: errorMapBuffer } },
+          { binding: 6, resource: targetTexture.createView() }
+        ]
+      });
+      const evaluateGroup = device.createBindGroup({
+        layout: evaluatePipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: targetTexture.createView() },
+          { binding: 1, resource: candidateAtlas.createView() },
+          { binding: 2, resource: { buffer: scoreBuffer } },
+          { binding: 3, resource: { buffer: paramsBuffer } }
+        ]
+      });
+      const finalizeGroup = device.createBindGroup({
+        layout: finalizePipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: candidateBuffer } },
+          { binding: 1, resource: { buffer: bestBuffer } },
+          { binding: 2, resource: { buffer: scoreBuffer } },
+          { binding: 3, resource: { buffer: bestScoreBuffer } },
+          { binding: 4, resource: { buffer: paramsBuffer } },
+          { binding: 5, resource: { buffer: candidateCountsBuffer } },
+          { binding: 6, resource: { buffer: bestCountBuffer } }
+        ]
+      });
+      const renderGroup = device.createBindGroup({
+        layout: renderPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: bestBuffer } },
+          { binding: 1, resource: outputTexture.createView() },
+          { binding: 3, resource: { buffer: bestCountBuffer } }
+        ]
+      });
+      const rasterGroup = device.createBindGroup({
+        layout: rasterPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: candidateBuffer } },
+          { binding: 1, resource: { buffer: candidateCountsBuffer } },
+          { binding: 2, resource: { buffer: paramsBuffer } }
+        ]
+      });
+      const guideGroup = device.createBindGroup({
+        layout: guidePipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: targetTexture.createView() },
+          { binding: 1, resource: outputTexture.createView() },
+          { binding: 2, resource: { buffer: errorMapBuffer } }
+        ]
+      });
+      gpu = {
+        ready: true, count, population, triangleBytes: maxGenomeBytes, candidateBytes, targetTexture, outputTexture, candidateAtlas,
+        candidateBuffer, bestBuffer, scoreBuffer, bestScoreBuffer, candidateCountsBuffer, bestCountBuffer, errorMapBuffer, paramsBuffer,
+        scoreReadback, countReadback, imageReadback, dnaReadback,
+        mutatePipeline, evaluatePipeline, finalizePipeline, renderPipeline, guidePipeline, rasterPipeline,
+        mutateGroup, evaluateGroup, finalizeGroup, renderGroup, guideGroup, rasterGroup,
+        hasGuidance: false,
+        importedGenome: pendingGenome !== null
+      };
+      if (pendingGenome) device.queue.writeBuffer(bestBuffer, 0, pendingGenome);
+      device.queue.writeBuffer(bestCountBuffer, 0, new Uint32Array([count]));
+      device.queue.writeBuffer(bestScoreBuffer, 0, new Uint32Array([0xffffffff]));
+      device.queue.writeBuffer(scoreBuffer, 0, new Uint32Array([0]));
+      generation = 0;
+      bestError = Infinity;
+      initialError = Infinity;
+      generationTimes = [];
+      candidateRates = [];
+      candidateEvaluations = 0;
+      lastReportTime = 0;
+      lastReportGeneration = 0;
+      lastReportCandidateEvaluations = 0;
+      resultContext.clearRect(0, 0, SIZE, SIZE);
+      document.querySelector("#resultEmpty").hidden = false;
+      document.querySelector("#fitnessValue").textContent = "—";
+      document.querySelector("#fitnessNote").innerHTML = "Lower is closer<br>to the target";
+      document.querySelector("#generationStat").textContent = "0";
+      document.querySelector("#liveTriangleStat").textContent = count;
+      document.querySelector("#improvementStat").textContent = "—";
+      document.querySelector("#rateStat").textContent = "—";
+      document.querySelector("#rateDetail").textContent = "—";
+      document.querySelector("#progressFill").style.width = "0%";
+      document.querySelector("#triangleValue").textContent = String(count);
+      document.querySelector("#footerTriangleCount").textContent = String(count);
+      updateGenomeSize(count);
+      runButton.disabled = false;
+      resetButton.disabled = false;
+      document.querySelector("#saveImageButton").disabled = true;
+      document.querySelector("#saveDnaButton").disabled = true;
+      resetButton.disabled = false;
+      document.querySelector("#resolutionCaption").textContent = `${SIZE} × ${SIZE} working resolution`;
+      setGpuState("ready", adapter.info?.description || "WebGPU ready");
+      setNotice(pendingGenome
+        ? `TOON genome loaded (${count} triangles). Start evolution to mutate and score it against the target.`
+        : "Ready to evolve. The first generation starts from a random triangle genome.");
+    }
+
+    function writeParams(initial, batchStart = 0, batchCount = gpu.population) {
+      const data = new ArrayBuffer(48);
+      const view = new DataView(data);
+      view.setUint32(0, gpu.count, true);
+      view.setUint32(4, gpu.population, true);
+      view.setUint32(8, seed >>> 0, true);
+      view.setUint32(12, initial, true);
+      view.setFloat32(16, Number(mutationRange.value) / 100, true);
+      view.setUint32(20, gpu.hasGuidance ? 1 : 0, true);
+      view.setUint32(24, batchStart, true);
+      view.setUint32(28, batchCount, true);
+      view.setFloat32(32, Number(structureRange.value) / 100, true);
+      seed = (seed + 0x6d2b79f5) >>> 0;
+      device.queue.writeBuffer(gpu.paramsBuffer, 0, data);
+    }
+
+    async function submitGeneration() {
+      const initial = generation === 0 ? (gpu.importedGenome ? 2 : 1) : 0;
+      for (let batchStart = 0; batchStart < gpu.population; batchStart += CANDIDATE_BATCH_SIZE) {
+        const batchCount = Math.min(CANDIDATE_BATCH_SIZE, gpu.population - batchStart);
+        writeParams(initial, batchStart, batchCount);
+        const encoder = device.createCommandEncoder({ label: `generation ${generation + 1}, candidates ${batchStart + 1}-${batchStart + batchCount}` });
+        encoder.clearBuffer(gpu.scoreBuffer, batchStart * 4, batchCount * 4);
+
+        const mutatePass = encoder.beginComputePass();
+        mutatePass.setPipeline(gpu.mutatePipeline);
+        mutatePass.setBindGroup(0, gpu.mutateGroup);
+        mutatePass.dispatchWorkgroups(Math.ceil(MAX_TRIANGLES / 64), batchCount);
+        mutatePass.end();
+
+        const renderPass = encoder.beginRenderPass({
+          label: "rasterize candidate batch",
+          colorAttachments: [{
+            view: gpu.candidateAtlas.createView(),
+            loadOp: "clear",
+            storeOp: "store",
+            clearValue: { r: 1, g: 1, b: 1, a: 1 }
+          }]
+        });
+        renderPass.setPipeline(gpu.rasterPipeline);
+        renderPass.setBindGroup(0, gpu.rasterGroup);
+        for (let localIndex = 0; localIndex < batchCount; localIndex += 1) {
+          const x = (localIndex % ATLAS_COLUMNS) * SIZE;
+          const y = Math.floor(localIndex / ATLAS_COLUMNS) * SIZE;
+          renderPass.setViewport(x, y, SIZE, SIZE, 0, 1);
+          renderPass.setScissorRect(x, y, SIZE, SIZE);
+          renderPass.draw(MAX_TRIANGLES * 3, 1, 0, localIndex);
+        }
+        renderPass.end();
+
+        const evaluatePass = encoder.beginComputePass();
+        evaluatePass.setPipeline(gpu.evaluatePipeline);
+        evaluatePass.setBindGroup(0, gpu.evaluateGroup);
+        evaluatePass.dispatchWorkgroups(Math.ceil(SIZE / 8), Math.ceil(SIZE / 8), batchCount);
+        evaluatePass.end();
+
+        const finalizePass = encoder.beginComputePass();
+        finalizePass.setPipeline(gpu.finalizePipeline);
+        finalizePass.setBindGroup(0, gpu.finalizeGroup);
+        finalizePass.dispatchWorkgroups(1);
+        finalizePass.end();
+        device.queue.submit([encoder.finish()]);
+      }
+      generation += 1;
+      candidateEvaluations += gpu.population;
+    }
+
+    async function updatePreview() {
+      writeParams(false);
+      const encoder = device.createCommandEncoder({ label: "preview best candidate" });
+      const renderPass = encoder.beginComputePass();
+      renderPass.setPipeline(gpu.renderPipeline);
+      renderPass.setBindGroup(0, gpu.renderGroup);
+      renderPass.dispatchWorkgroups(Math.ceil(SIZE / 8), Math.ceil(SIZE / 8));
+      renderPass.end();
+      const guidePass = encoder.beginComputePass();
+      guidePass.setPipeline(gpu.guidePipeline);
+      guidePass.setBindGroup(0, gpu.guideGroup);
+      guidePass.dispatchWorkgroups(Math.ceil(SIZE / 8), Math.ceil(SIZE / 8));
+      guidePass.end();
+      encoder.copyBufferToBuffer(gpu.bestScoreBuffer, 0, gpu.scoreReadback, 0, 4);
+      encoder.copyBufferToBuffer(gpu.bestCountBuffer, 0, gpu.countReadback, 0, 4);
+      encoder.copyTextureToBuffer(
+        { texture: gpu.outputTexture },
+        { buffer: gpu.imageReadback, bytesPerRow: IMAGE_BYTES_PER_ROW, rowsPerImage: SIZE },
+        [SIZE, SIZE]
+      );
+      device.queue.submit([encoder.finish()]);
+      gpu.hasGuidance = true;
+      await Promise.all([
+        gpu.scoreReadback.mapAsync(GPUMapMode.READ),
+        gpu.countReadback.mapAsync(GPUMapMode.READ),
+        gpu.imageReadback.mapAsync(GPUMapMode.READ)
+      ]);
+      const score = new Uint32Array(gpu.scoreReadback.getMappedRange())[0];
+      const count = new Uint32Array(gpu.countReadback.getMappedRange())[0];
+      const paddedImage = new Uint8Array(gpu.imageReadback.getMappedRange().slice(0));
+      const image = new Uint8ClampedArray(SIZE * SIZE * 4);
+      for (let row = 0; row < SIZE; row += 1) {
+        image.set(paddedImage.subarray(row * IMAGE_BYTES_PER_ROW, row * IMAGE_BYTES_PER_ROW + SIZE * 4), row * SIZE * 4);
+      }
+      gpu.scoreReadback.unmap();
+      gpu.countReadback.unmap();
+      gpu.imageReadback.unmap();
+      gpu.count = count;
+      const mse = score / (SIZE * SIZE * 4 * 10000);
+      if (Number.isFinite(mse)) {
+        bestError = mse;
+        if (!Number.isFinite(initialError)) initialError = mse;
+        resultContext.putImageData(new ImageData(image, SIZE, SIZE), 0, 0);
+        document.querySelector("#resultEmpty").hidden = true;
+        document.querySelector("#fitnessValue").textContent = mse.toFixed(4);
+        document.querySelector("#fitnessNote").innerHTML = "1×, ½×, ¼×, ⅛× scales<br>Lower is better";
+        document.querySelector("#improvementStat").textContent = `${improvementPercent().toFixed(1)}%`;
+        document.querySelector("#progressFill").style.width = `${Math.max(1, Math.min(100, improvementPercent()))}%`;
+        document.querySelector("#saveImageButton").disabled = false;
+        document.querySelector("#saveDnaButton").disabled = false;
+      }
+      document.querySelector("#generationStat").textContent = generation.toLocaleString();
+      document.querySelector("#liveTriangleStat").textContent = count.toLocaleString();
+      triangleRange.value = String(count);
+      document.querySelector("#triangleValue").textContent = String(count);
+      document.querySelector("#footerTriangleCount").textContent = String(count);
+      updateGenomeSize(count);
+      const now = performance.now();
+      if (lastReportTime > 0) {
+        const generationRate = (generation - lastReportGeneration) / ((now - lastReportTime) / 1000);
+        generationTimes.push(generationRate);
+        if (generationTimes.length > 5) generationTimes.shift();
+        const averageGenerationRate = generationTimes.reduce((a, b) => a + b, 0) / generationTimes.length;
+        const candidateRate = (candidateEvaluations - lastReportCandidateEvaluations) / ((now - lastReportTime) / 1000);
+        candidateRates.push(candidateRate);
+        if (candidateRates.length > 5) candidateRates.shift();
+        const averageCandidateRate = candidateRates.reduce((a, b) => a + b, 0) / candidateRates.length;
+        document.querySelector("#rateStat").textContent = `${averageCandidateRate.toFixed(1)}/s`;
+        document.querySelector("#rateDetail").textContent = `${averageGenerationRate.toFixed(1)} generations/s`;
+      }
+      lastReportTime = now;
+      lastReportGeneration = generation;
+      lastReportCandidateEvaluations = candidateEvaluations;
+    }
+
+    function improvementPercent() {
+      if (!Number.isFinite(bestError) || !Number.isFinite(initialError) || initialError === 0) return 0;
+      return Math.max(0, (1 - bestError / initialError) * 100);
+    }
+
+    async function evolve() {
+      if (busy || !running || !gpu?.ready) return;
+      busy = true;
+      try {
+        while (running && gpu?.ready) {
+          for (let i = 0; i < REPORT_EVERY && running; i += 1) {
+            await submitGeneration();
+          }
+          if (!running) break;
+          await updatePreview();
+        }
+        if (gpu?.ready && generation !== lastReportGeneration) await updatePreview();
+      } catch (error) {
+        running = false;
+        runButton.innerHTML = "▶ &nbsp; Start evolution";
+        reportError(error);
+      } finally {
+        busy = false;
+      }
+    }
+
+    function setRunning(value) {
+      running = value;
+      triangleRange.disabled = value;
+      runButton.innerHTML = value ? "Ⅱ &nbsp; Pause evolution" : "▶ &nbsp; Start evolution";
+      if (value) evolve();
+    }
+
+    async function resetEvolution() {
+      setRunning(false);
+      if (gpu) gpu.ready = false;
+      await waitForEvolutionToStop();
+      disposeGpu();
+      if (targetLoaded && device) await initializeEvolution();
+      else if (targetLoaded) await initializeGpu();
+    }
+
+    async function saveDna() {
+      if (!gpu?.ready) return;
+      try {
+        const encoder = device.createCommandEncoder({ label: "copy best genome for export" });
+        encoder.copyBufferToBuffer(gpu.bestBuffer, 0, gpu.dnaReadback, 0, gpu.triangleBytes);
+        device.queue.submit([encoder.finish()]);
+        await gpu.dnaReadback.mapAsync(GPUMapMode.READ);
+        const raw = new Float32Array(gpu.dnaReadback.getMappedRange().slice(0));
+        gpu.dnaReadback.unmap();
+        const triangles = [];
+        for (let i = 0; i < gpu.count; i += 1) {
+          const offset = i * 12;
+          triangles.push({
+            values: [
+              raw[offset], raw[offset + 1],
+              raw[offset + 4], raw[offset + 5],
+              raw[offset + 8], raw[offset + 9],
+              raw[offset + 2], raw[offset + 3], raw[offset + 6],
+              raw[offset + 7]
+            ]
+          });
+        }
+        const rows = triangles.map(({ values }) => `  ${values.map((value) => Number(value.toFixed(6))).join(",")}`);
+        const toon = [
+          "format: form-signal-dna",
+          "version: 1",
+          `workingResolution: ${SIZE}`,
+          `fitness: ${Number.isFinite(bestError) ? bestError.toFixed(6) : "null"}`,
+          `triangles[${triangles.length}]{ax,ay,bx,by,cx,cy,r,g,b,opacity}:`,
+          ...rows
+        ].join("\n");
+        downloadBlob(
+          new Blob([toon], { type: "text/plain;charset=utf-8" }),
+          `${safeFilename(selectedImageName)}-genome.toon`
+        );
+      } catch (error) {
+        reportError(error);
+      }
+    }
+
+    function parseToonGenome(text) {
+      const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).map((line) => line.trimEnd());
+      const formatLine = lines.find((line) => line.trim().length > 0)?.trim();
+      if (formatLine !== "format: form-signal-dna") {
+        throw new Error("Unsupported TOON genome: expected `format: form-signal-dna`.");
+      }
+      if (!lines.some((line) => line.trim() === "version: 1")) {
+        throw new Error("Unsupported TOON genome version. Expected version 1.");
+      }
+      const tableIndex = lines.findIndex((line) => /^triangles\[\d+\]\{[^}]+\}:$/.test(line.trim()));
+      if (tableIndex < 0) {
+        throw new Error("Could not find the TOON triangles table.");
+      }
+      const header = lines[tableIndex].trim().match(/^triangles\[(\d+)\]\{([^}]+)\}:$/);
+      const count = Number(header[1]);
+      const expectedFields = "ax,ay,bx,by,cx,cy,r,g,b,opacity";
+      if (header[2] !== expectedFields) {
+        throw new Error(`Unexpected TOON triangle columns. Expected: ${expectedFields}.`);
+      }
+      if (!Number.isInteger(count) || count < Number(triangleRange.min) || count > Number(triangleRange.max)) {
+        throw new Error(`TOON triangle count must be between ${triangleRange.min} and ${triangleRange.max}.`);
+      }
+      const rows = lines.slice(tableIndex + 1).map((line) => line.trim()).filter(Boolean);
+      if (rows.length !== count) {
+        throw new Error(`TOON declares ${count} triangles but contains ${rows.length} data rows.`);
+      }
+
+      const genome = new Float32Array(count * 12);
+      for (let i = 0; i < count; i += 1) {
+        const parts = rows[i].split(",").map((part) => part.trim());
+        const values = parts.map(Number);
+        if (values.length !== 10 || parts.some((part) => !/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(part))
+          || values.some((value) => !Number.isFinite(value) || value > 1)) {
+          throw new Error(`Invalid triangle data on TOON row ${i + 1}. Each row needs ten values from 0 to 1.`);
+        }
+        const offset = i * 12;
+        genome.set([
+          values[0], values[1], values[6], values[7],
+          values[2], values[3], values[8], values[9],
+          values[4], values[5], 0, 0
+        ], offset);
+      }
+      return { count, genome };
+    }
+
+    async function importToonGenome(text) {
+      try {
+        const imported = parseToonGenome(text);
+        setRunning(false);
+        triangleRange.step = "1";
+        triangleRange.value = String(imported.count);
+        pendingGenome = imported.genome;
+        updateControlLabels();
+        if (targetLoaded) {
+          await resetEvolution();
+        } else {
+          setNotice(`TOON genome loaded (${imported.count} triangles). Choose a target image to begin evolution.`);
+        }
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : String(error), true);
+      }
+    }
+
+    async function loadToonFile(file) {
+      if (!file) return;
+      try {
+        const text = await file.text();
+        toonText.value = text;
+        await importToonGenome(text);
+      } catch (error) {
+        setNotice(`Could not read the TOON file: ${error.message}`, true);
+      }
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function safeFilename(name) {
+      return name.toLowerCase().replace(/[^a-z0-9-_]+/g, "-").replace(/^-|-$/g, "") || "image";
+    }
+
+    function reportError(error) {
+      console.error(error);
+      setGpuState("error", "Initialization error");
+      setNotice(error instanceof Error ? error.message : String(error), true);
+      runButton.disabled = true;
+    }
+
+    function stopCamera() {
+      if (cameraStream) {
+        for (const track of cameraStream.getTracks()) track.stop();
+        cameraStream = null;
+      }
+      const video = document.querySelector("#cameraVideo");
+      video.pause();
+      video.srcObject = null;
+      video.classList.remove("active");
+      document.querySelector("#captureButton").classList.remove("active");
+      document.querySelector("#cameraButton").textContent = "◎  Use camera";
+    }
+
+    async function toggleCamera() {
+      if (cameraStream) {
+        stopCamera();
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setNotice("Camera capture is not available here. Use HTTPS or localhost, or upload an image.", true);
+        return;
+      }
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+        const video = document.querySelector("#cameraVideo");
+        video.srcObject = cameraStream;
+        await video.play();
+        video.classList.add("active");
+        document.querySelector("#captureButton").classList.add("active");
+        document.querySelector("#cameraButton").textContent = "×  Stop camera";
+        setNotice("Camera is ready. Capture a frame to use it as the target.");
+      } catch (error) {
+        setNotice(`Could not access the camera: ${error.message}`, true);
+      }
+    }
+
+    document.querySelector("#uploadButton").addEventListener("click", () => imageInput.click());
+    imageInput.addEventListener("change", (event) => loadImageFile(event.target.files[0]));
+    document.querySelector("#sampleButton").addEventListener("click", makeSample);
+    document.querySelector("#toonUploadButton").addEventListener("click", () => toonFileInput.click());
+    toonFileInput.addEventListener("change", (event) => loadToonFile(event.target.files[0]));
+    document.querySelector("#toonImportButton").addEventListener("click", () => importToonGenome(toonText.value));
+    document.querySelector("#cameraButton").addEventListener("click", toggleCamera);
+    document.querySelector("#captureButton").addEventListener("click", async () => {
+      const video = document.querySelector("#cameraVideo");
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        setNotice("Wait for the camera preview to become available, then capture again.", true);
+        return;
+      }
+      drawSourceCover(video);
+      selectedImageName = "camera-capture";
+      stopCamera();
+      await targetReady().catch(reportError);
+    });
+    runButton.addEventListener("click", () => setRunning(!running));
+    resetButton.addEventListener("click", resetEvolution);
+    triangleRange.addEventListener("input", updateControlLabels);
+    triangleRange.addEventListener("change", () => {
+      if (!targetLoaded) return;
+      if (pendingGenome && pendingGenome.length !== Number(triangleRange.value) * 12) {
+        pendingGenome = null;
+        setNotice("Triangle count changed; the imported TOON genome was cleared. Evolution will restart with a random genome.");
+      }
+      resetEvolution().catch(reportError);
+    });
+    populationRange.addEventListener("input", updateControlLabels);
+    populationRange.addEventListener("input", () => {
+      if (gpu?.ready) gpu.population = Number(populationRange.value);
+    });
+    mutationRange.addEventListener("input", updateControlLabels);
+    structureRange.addEventListener("input", updateControlLabels);
+    document.querySelector("#saveImageButton").addEventListener("click", () => {
+      resultCanvas.toBlob((blob) => {
+        if (blob) downloadBlob(blob, `${safeFilename(selectedImageName)}-evolved.png`);
+      }, "image/png");
+    });
+    document.querySelector("#saveDnaButton").addEventListener("click", saveDna);
+
+    updateControlLabels();
+    if (navigator.gpu) {
+      setGpuState("pending", "WebGPU available");
+      setNotice("WebGPU is available. Load an image or try the sample artwork to begin.");
+    } else {
+      setGpuState("error", "WebGPU unavailable");
+      setNotice("WebGPU is required. Try a recent Chrome or Edge on HTTPS or localhost.", true);
+    }
+    makeSample();
+  </script>
+</body>
+</html>
