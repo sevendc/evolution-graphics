@@ -36,10 +36,15 @@ The genome supports up to 512 triangles and the population setting ranges up to 
 
 ## Project files
 
-- [`index.html`](./index.html) — Self-contained application: interface, styles, JavaScript, and WGSL GPU shaders.
+- [`index.html`](./index.html) — Application markup and relative links to its stylesheet and JavaScript entry point.
+- [`styles.css`](./styles.css) — Application styling and responsive layout.
+- [`js/main.js`](./js/main.js) — Application startup, UI behavior, and evolution orchestration.
+- [`js/media.js`](./js/media.js) — Sample artwork rendering and local image loading helpers.
+- [`js/genome.js`](./js/genome.js) — TOON genome parsing, serialization, and downloads.
+- [`js/gpu/shaders.js`](./js/gpu/shaders.js) — WGSL shader source used by WebGPU.
 - [`server.js`](./server.js) — Minimal static-file server used by `npm start`.
 - [`package.json`](./package.json) — Project metadata and start script.
 - [`plan.md`](./plan.md), [`plan2.md`](./plan2.md), and [`plan3.md`](./plan3.md) — Implementation notes and follow-up ideas.
 - [`whatsapp-image-2024-09-12-at-17-15-37_4652b8f4-genome.toon`](./whatsapp-image-2024-09-12-at-17-15-37_4652b8f4-genome.toon) — Example TOON genome.
 
-The application processes images locally in the browser; it does not upload them to a server. There is currently no automated test script in `package.json`.
+JavaScript imports and stylesheet links use relative paths so the app also works when deployed under a GitHub Pages repository path. The application processes images locally in the browser; it does not upload them to a server. There is currently no automated test script in `package.json`.
