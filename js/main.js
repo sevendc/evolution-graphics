@@ -6,7 +6,10 @@ const SIZE = 160;
 const IMAGE_BYTES_PER_ROW = Math.ceil(SIZE * 4 / 256) * 256;
 const REPORT_EVERY = 5;
 const MAX_POPULATION = 2048;
-const MAX_TRIANGLES = 512;
+const MAX_SHAPES = 512;
+const MAX_VERTICES = 8;
+const SHAPE_FLOATS = MAX_VERTICES * 2 + 8;
+const SHAPE_BYTES = SHAPE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const CANDIDATE_BATCH_SIZE = 512;
 const ATLAS_COLUMNS = 23;
 const ATLAS_ROWS = Math.ceil(CANDIDATE_BATCH_SIZE / ATLAS_COLUMNS);
@@ -23,6 +26,7 @@ const gpuStatusText = document.querySelector("#gpuStatusText");
 const triangleRange = document.querySelector("#triangleRange");
 const mutationRange = document.querySelector("#mutationRange");
 const structureRange = document.querySelector("#structureRange");
+const complexityRange = document.querySelector("#complexityRange");
 const populationRange = document.querySelector("#populationRange");
 const decimateRange = document.querySelector("#decimateRange");
 const focusRange = document.querySelector("#focusRange");
@@ -81,6 +85,7 @@ function updateControlLabels() {
   updateGenomeSize(count);
   document.querySelector("#mutationValue").textContent = (Number(mutationRange.value) / 100).toFixed(2);
   document.querySelector("#structureValue").textContent = `${Number(structureRange.value).toFixed(1)}%`;
+  document.querySelector("#complexityValue").textContent = complexityRange.value;
   document.querySelector("#populationValue").textContent = populationRange.value;
   document.querySelector("#decimateValue").textContent = `${decimateRange.value}%`;
   document.querySelector("#focusValue").textContent = `${focusRange.value}%`;
@@ -100,6 +105,7 @@ function syncDecimationControls() {
   triangleRange.disabled = locked || running;
   mutationRange.disabled = locked;
   structureRange.disabled = locked;
+  complexityRange.disabled = locked;
   populationRange.disabled = locked;
   decimateRange.disabled = locked;
   document.querySelector("#decimateButton").disabled = locked || unavailable || gpu.count < 2;
@@ -172,7 +178,7 @@ function writeFocusParams(view) {
 }
 
 function updateGenomeSize(count) {
-  document.querySelector("#genomeStat").textContent = `${(count * 48 / 1024).toFixed(2)} KB DNA`;
+  document.querySelector("#genomeStat").textContent = `${(count * SHAPE_BYTES / 1024).toFixed(2)} KB DNA`;
 }
 
 function makeSample() {
@@ -260,9 +266,9 @@ function createPipeline(code, label) {
 }
 
 function createRasterPipeline(code) {
-  const module = device.createShaderModule({ code, label: "rasterize candidate triangles" });
+  const module = device.createShaderModule({ code, label: "rasterize candidate shapes" });
   return device.createRenderPipeline({
-    label: "rasterize candidate triangles",
+    label: "rasterize candidate shapes",
     layout: "auto",
     vertex: { module, entryPoint: "vertexMain" },
     fragment: {
@@ -307,10 +313,10 @@ async function initializeEvolution() {
   if (!device || !targetLoaded) return;
   const count = Number(triangleRange.value);
   const population = Number(populationRange.value);
-  const maxGenomeBytes = MAX_TRIANGLES * 48;
+  const maxGenomeBytes = MAX_SHAPES * SHAPE_BYTES;
   const candidateBytes = maxGenomeBytes * MAX_POPULATION;
-  if (pendingGenome && pendingGenome.length !== count * 12) {
-    throw new Error("The loaded TOON genome size does not match the triangle count control.");
+  if (pendingGenome && pendingGenome.length !== count * SHAPE_FLOATS) {
+    throw new Error("The loaded TOON genome size does not match the shape count control.");
   }
   const targetTexture = device.createTexture({
     label: "target image",
@@ -413,7 +419,7 @@ async function initializeEvolution() {
     ]
   });
   gpu = {
-    ready: true, count, population, triangleBytes: maxGenomeBytes, candidateBytes, targetTexture, outputTexture, candidateAtlas,
+    ready: true, count, population, genomeBytes: maxGenomeBytes, candidateBytes, targetTexture, outputTexture, candidateAtlas,
     candidateBuffer, bestBuffer, scoreBuffer, bestScoreBuffer, candidateCountsBuffer, bestCountBuffer, errorMapBuffer, paramsBuffer,
     scoreReadback, countReadback, imageReadback, dnaReadback, decimationScoreReadback,
     mutatePipeline, evaluatePipeline, finalizePipeline, guidePipeline, rasterPipeline,
@@ -455,8 +461,8 @@ async function initializeEvolution() {
   document.querySelector("#resolutionCaption").textContent = `${SIZE} × ${SIZE} working resolution`;
   setGpuState("ready", adapter.info?.description || "WebGPU ready");
   setNotice(pendingGenome
-    ? `TOON genome loaded (${count} triangles). Start evolution to mutate and score it against the target.`
-    : "Ready to evolve. The first generation starts from a random triangle genome.");
+    ? `TOON genome loaded (${count} shapes). Start evolution to mutate and score it against the target.`
+    : "Ready to evolve. The first generation starts from a random shape genome.");
   syncDecimationControls();
 }
 
@@ -472,6 +478,7 @@ function writeParams(initial, batchStart = 0, batchCount = gpu.population) {
   view.setUint32(24, batchStart, true);
   view.setUint32(28, batchCount, true);
   view.setFloat32(32, Number(structureRange.value) / 100, true);
+  view.setUint32(44, Number(complexityRange.value), true);
   writeFocusParams(view);
   seed = (seed + 0x6d2b79f5) >>> 0;
   device.queue.writeBuffer(gpu.paramsBuffer, 0, data);
@@ -488,7 +495,7 @@ async function submitGeneration() {
     const mutatePass = encoder.beginComputePass();
     mutatePass.setPipeline(gpu.mutatePipeline);
     mutatePass.setBindGroup(0, gpu.mutateGroup);
-    mutatePass.dispatchWorkgroups(Math.ceil(MAX_TRIANGLES / 64), batchCount);
+    mutatePass.dispatchWorkgroups(Math.ceil(MAX_SHAPES / 64), batchCount);
     mutatePass.end();
 
     const renderPass = encoder.beginRenderPass({
@@ -507,7 +514,7 @@ async function submitGeneration() {
       const y = Math.floor(localIndex / ATLAS_COLUMNS) * SIZE;
       renderPass.setViewport(x, y, SIZE, SIZE, 0, 1);
       renderPass.setScissorRect(x, y, SIZE, SIZE);
-      renderPass.draw(MAX_TRIANGLES * 3, 1, 0, localIndex);
+      renderPass.draw(MAX_SHAPES * (MAX_VERTICES - 2) * 3, 1, 0, localIndex);
     }
     renderPass.end();
 
@@ -545,7 +552,7 @@ async function updatePreview() {
   renderPass.setBindGroup(0, gpu.bestRenderGroup);
   renderPass.setViewport(0, 0, SIZE, SIZE, 0, 1);
   renderPass.setScissorRect(0, 0, SIZE, SIZE);
-  renderPass.draw(MAX_TRIANGLES * 3, 1, 0, 0);
+  renderPass.draw(MAX_SHAPES * (MAX_VERTICES - 2) * 3, 1, 0, 0);
   renderPass.end();
   const guidePass = encoder.beginComputePass();
   guidePass.setPipeline(gpu.guidePipeline);
@@ -616,7 +623,7 @@ async function updatePreview() {
 }
 
 async function readBestGenome() {
-  const byteLength = gpu.count * 48;
+  const byteLength = gpu.count * SHAPE_BYTES;
   const encoder = device.createCommandEncoder({ label: "copy best genome for simplification" });
   encoder.copyBufferToBuffer(gpu.bestBuffer, 0, gpu.dnaReadback, 0, byteLength);
   device.queue.submit([encoder.finish()]);
@@ -632,6 +639,7 @@ function writeEvaluationParams(count, candidateCount) {
   view.setUint32(0, count, true);
   view.setUint32(4, candidateCount, true);
   view.setUint32(28, candidateCount, true);
+  view.setUint32(44, Number(complexityRange.value), true);
   writeFocusParams(view);
   device.queue.writeBuffer(gpu.paramsBuffer, 0, data);
 }
@@ -660,7 +668,7 @@ function submitDecimationEvaluation(candidateCount, triangleCount, readbackBuffe
     const y = Math.floor(localIndex / ATLAS_COLUMNS) * SIZE;
     renderPass.setViewport(x, y, SIZE, SIZE, 0, 1);
     renderPass.setScissorRect(x, y, SIZE, SIZE);
-    renderPass.draw(MAX_TRIANGLES * 3, 1, 0, localIndex);
+    renderPass.draw(MAX_SHAPES * (MAX_VERTICES - 2) * 3, 1, 0, localIndex);
   }
   renderPass.end();
 
@@ -694,7 +702,7 @@ async function simplifyGenome() {
   resumeAfterDecimation = running;
   setRunning(false);
   decimationBusy = true;
-  document.querySelector("#decimateSummary").textContent = "Pausing evolution and analyzing triangle impact…";
+  document.querySelector("#decimateSummary").textContent = "Pausing evolution and analyzing shape impact…";
   syncDecimationControls();
   try {
     await waitForEvolutionToStop();
@@ -703,15 +711,15 @@ async function simplifyGenome() {
     const originalCount = gpu.count;
     const originalError = bestError;
     const genome = await readBestGenome();
-    const floatsPerCandidate = MAX_TRIANGLES * 12;
+    const floatsPerCandidate = MAX_SHAPES * SHAPE_FLOATS;
     const variants = new Float32Array(originalCount * floatsPerCandidate);
     for (let removedIndex = 0; removedIndex < originalCount; removedIndex += 1) {
       const offset = removedIndex * floatsPerCandidate;
-      variants.set(genome.subarray(0, removedIndex * 12), offset);
-      variants.set(genome.subarray((removedIndex + 1) * 12), offset + removedIndex * 12);
+      variants.set(genome.subarray(0, removedIndex * SHAPE_FLOATS), offset);
+      variants.set(genome.subarray((removedIndex + 1) * SHAPE_FLOATS), offset + removedIndex * SHAPE_FLOATS);
     }
 
-    document.querySelector("#decimateSummary").textContent = `Scoring ${originalCount} leave-one-triangle-out variants…`;
+    document.querySelector("#decimateSummary").textContent = `Scoring ${originalCount} leave-one-shape-out variants…`;
     device.queue.writeBuffer(gpu.candidateBuffer, 0, variants);
     submitDecimationEvaluation(
       originalCount,
@@ -729,16 +737,16 @@ async function simplifyGenome() {
     const ranked = Array.from(scores, (score, index) => ({ score, index }));
     ranked.sort((a, b) => a.score - b.score);
     const removed = new Set(ranked.slice(0, requestedRemovalCount).map(({ index }) => index));
-    const simplified = new Float32Array((originalCount - removed.size) * 12);
+    const simplified = new Float32Array((originalCount - removed.size) * SHAPE_FLOATS);
     let destination = 0;
     for (let index = 0; index < originalCount; index += 1) {
       if (removed.has(index)) continue;
-      simplified.set(genome.subarray(index * 12, index * 12 + 12), destination);
-      destination += 12;
+      simplified.set(genome.subarray(index * SHAPE_FLOATS, index * SHAPE_FLOATS + SHAPE_FLOATS), destination);
+      destination += SHAPE_FLOATS;
     }
 
     device.queue.writeBuffer(gpu.candidateBuffer, 0, simplified);
-    submitDecimationEvaluation(1, simplified.length / 12, gpu.scoreReadback, true);
+    submitDecimationEvaluation(1, simplified.length / SHAPE_FLOATS, gpu.scoreReadback, true);
     await Promise.all([
       gpu.scoreReadback.mapAsync(GPUMapMode.READ),
       gpu.imageReadback.mapAsync(GPUMapMode.READ)
@@ -751,7 +759,7 @@ async function simplifyGenome() {
 
     decimationPreview = {
       genome: simplified,
-      count: simplified.length / 12,
+      count: simplified.length / SHAPE_FLOATS,
       score: simplifiedScore,
       error: simplifiedError,
       originalError
@@ -771,7 +779,7 @@ async function simplifyGenome() {
       : (simplifiedError === 0 ? 0 : Infinity);
     const changeLabel = Number.isFinite(fitnessChange) ? `${fitnessChange >= 0 ? "+" : ""}${fitnessChange.toFixed(1)}%` : "increased";
     document.querySelector("#decimateSummary").textContent =
-      `Preview: ${originalCount} → ${decimationPreview.count} triangles (${removed.size} removed). ` +
+      `Preview: ${originalCount} → ${decimationPreview.count} shapes (${removed.size} removed). ` +
       `Error: ${originalError.toFixed(4)} → ${simplifiedError.toFixed(4)} (${changeLabel}).`;
     document.querySelector("#decimateReview").hidden = false;
     syncDecimationControls();
@@ -830,7 +838,7 @@ function keepSimplification() {
   updateGenomeSize(preview.count);
   decimationPreview = null;
   document.querySelector("#decimateReview").hidden = true;
-  document.querySelector("#decimateSummary").textContent = `Kept the simplified genome with ${preview.count} triangles.`;
+  document.querySelector("#decimateSummary").textContent = `Kept the simplified genome with ${preview.count} shapes.`;
   syncDecimationControls();
   setNotice("Simplified genome kept. Evolution will continue from it when started.");
   resumeEvolutionAfterDecimation();
@@ -894,7 +902,7 @@ async function resetEvolution() {
   if (decimationBusy || decimationPreview) return;
   setRunning(false);
   await waitForEvolutionToStop();
-  if (gpu?.importedGenome && pendingGenome && pendingGenome.length !== gpu.count * 12) {
+  if (gpu?.importedGenome && pendingGenome && pendingGenome.length !== gpu.count * SHAPE_FLOATS) {
     pendingGenome = await readBestGenome();
   }
   if (gpu) gpu.ready = false;
@@ -907,7 +915,7 @@ async function saveDna() {
   if (!gpu?.ready) return;
   try {
     const encoder = device.createCommandEncoder({ label: "copy best genome for export" });
-    encoder.copyBufferToBuffer(gpu.bestBuffer, 0, gpu.dnaReadback, 0, gpu.triangleBytes);
+    encoder.copyBufferToBuffer(gpu.bestBuffer, 0, gpu.dnaReadback, 0, gpu.genomeBytes);
     device.queue.submit([encoder.finish()]);
     await gpu.dnaReadback.mapAsync(GPUMapMode.READ);
     const raw = new Float32Array(gpu.dnaReadback.getMappedRange().slice(0));
@@ -925,6 +933,7 @@ async function saveDna() {
 async function importToonGenome(text) {
   try {
     const imported = parseToonGenome(text, Number(triangleRange.min), Number(triangleRange.max));
+    complexityRange.value = String(Math.max(Number(complexityRange.value), imported.maxVertices));
     setRunning(false);
     triangleRange.step = "1";
     triangleRange.value = String(imported.count);
@@ -933,7 +942,7 @@ async function importToonGenome(text) {
     if (targetLoaded) {
       await resetEvolution();
     } else {
-      setNotice(`TOON genome loaded (${imported.count} triangles). Choose a target image to begin evolution.`);
+      setNotice(`TOON genome loaded (${imported.count} shapes). Choose a target image to begin evolution.`);
     }
   } catch (error) {
     setNotice(error instanceof Error ? error.message : String(error), true);
@@ -1046,9 +1055,9 @@ resetButton.addEventListener("click", resetEvolution);
 triangleRange.addEventListener("input", updateControlLabels);
 triangleRange.addEventListener("change", () => {
   if (!targetLoaded) return;
-  if (pendingGenome && pendingGenome.length !== Number(triangleRange.value) * 12) {
+  if (pendingGenome && pendingGenome.length !== Number(triangleRange.value) * SHAPE_FLOATS) {
     pendingGenome = null;
-    setNotice("Triangle count changed; the imported TOON genome was cleared. Evolution will restart with a random genome.");
+    setNotice("Shape count changed; the imported TOON genome was cleared. Evolution will restart with a random genome.");
   }
   resetEvolution().catch(reportError);
 });
@@ -1058,6 +1067,7 @@ populationRange.addEventListener("input", () => {
 });
 mutationRange.addEventListener("input", updateControlLabels);
 structureRange.addEventListener("input", updateControlLabels);
+complexityRange.addEventListener("input", updateControlLabels);
 decimateRange.addEventListener("input", updateControlLabels);
 focusRange.addEventListener("input", () => {
   document.querySelector("#focusValue").textContent = `${focusRange.value}%`;

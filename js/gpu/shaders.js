@@ -1,9 +1,10 @@
 export const mutationShader = `
-      struct Triangle { a: vec4f, b: vec4f, c: vec4f };
-      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, padding0: u32, focusMin: vec2f, focusMax: vec2f };
-      const MAX_TRIANGLES: u32 = 512u;
-      @group(0) @binding(0) var<storage, read_write> candidate: array<Triangle>;
-      @group(0) @binding(1) var<storage, read> best: array<Triangle>;
+      struct Shape { points: array<vec2f, 8>, color: vec4f, properties: vec4f };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, maxVertices: u32, focusMin: vec2f, focusMax: vec2f };
+      const MAX_SHAPES: u32 = 512u;
+      const MAX_VERTICES: u32 = 8u;
+      @group(0) @binding(0) var<storage, read_write> candidate: array<Shape>;
+      @group(0) @binding(1) var<storage, read> best: array<Shape>;
       @group(0) @binding(2) var<uniform> params: Params;
       @group(0) @binding(3) var<storage, read_write> bestCount: array<atomic<u32>>;
       @group(0) @binding(4) var<storage, read_write> candidateCounts: array<u32>;
@@ -23,7 +24,7 @@ export const mutationShader = `
         return random01(value) * 2.0 - 1.0;
       }
 
-      fn sourceTriangle(center: vec2f, pigment: vec3f, seed: u32, baseRadius: f32) -> Triangle {
+      fn sourceTriangle(center: vec2f, pigment: vec3f, seed: u32, baseRadius: f32) -> Shape {
         let angle = random01(seed + 80u) * 6.2831853;
         let radius = baseRadius * (0.35 + random01(seed + 81u) * 1.3);
         let stretchX = 0.45 + random01(seed + 82u) * 1.4;
@@ -31,56 +32,65 @@ export const mutationShader = `
         let a = center + vec2f(cos(angle) * radius * stretchX, sin(angle) * radius * stretchY);
         let b = center + vec2f(cos(angle + 2.0943951) * radius * stretchX, sin(angle + 2.0943951) * radius * stretchY);
         let c = center + vec2f(cos(angle + 4.1887902) * radius * stretchX, sin(angle + 4.1887902) * radius * stretchY);
-        return Triangle(
-          vec4f(clamp(a, vec2f(0.0), vec2f(1.0)), pigment.r, pigment.g),
-          vec4f(clamp(b, vec2f(0.0), vec2f(1.0)), pigment.b, 0.55 + random01(seed + 84u) * 0.4),
-          vec4f(clamp(c, vec2f(0.0), vec2f(1.0)), 0.0, 0.0)
-        );
+        var shape: Shape;
+        shape.points[0] = clamp(a, vec2f(0.0), vec2f(1.0));
+        shape.points[1] = clamp(b, vec2f(0.0), vec2f(1.0));
+        shape.points[2] = clamp(c, vec2f(0.0), vec2f(1.0));
+        shape.color = vec4f(pigment, 0.55 + random01(seed + 84u) * 0.4);
+        shape.properties = vec4f(3.0, 0.0, 0.0, 0.0);
+        return shape;
+      }
+
+      fn randomTriangle(seed: u32) -> Shape {
+        var shape: Shape;
+        for (var point = 0u; point < 3u; point += 1u) {
+          shape.points[point] = vec2f(random01(seed + point * 2u + 1u), random01(seed + point * 2u + 2u));
+        }
+        shape.color = vec4f(random01(seed + 7u), random01(seed + 8u), random01(seed + 9u), 0.15 + random01(seed + 10u) * 0.65);
+        shape.properties = vec4f(3.0, 0.0, 0.0, 0.0);
+        return shape;
       }
 
       @compute @workgroup_size(64)
       fn main(@builtin(global_invocation_id) id: vec3u) {
         let i = id.x;
         let candidateIndex = params.batchStart + id.y;
-        if (i >= MAX_TRIANGLES || id.y >= params.batchCount) { return; }
-        let bufferIndex = candidateIndex * MAX_TRIANGLES + i;
+        if (i >= MAX_SHAPES || id.y >= params.batchCount) { return; }
+        let bufferIndex = candidateIndex * MAX_SHAPES + i;
         let seed = params.seed + candidateIndex * 0x85ebca6bu + i * 0x9e3779b9u;
         let currentCount = atomicLoad(&bestCount[0]);
         var candidateCount = params.count;
         let topologyChance = random01(params.seed + candidateIndex * 0x85ebca6bu + 0xa511e9b3u);
         let topologyRoll = random01(params.seed + candidateIndex * 0x85ebca6bu + 0x63d83595u);
         let topologyMutation = params.initial == 0u && topologyChance < params.structuralMutation;
-        if (params.initial == 0u) {
-          candidateCount = currentCount;
-          if (topologyMutation && (currentCount == 1u || (currentCount < MAX_TRIANGLES && topologyRoll < 0.5))) {
-            candidateCount = min(currentCount + 1u, MAX_TRIANGLES);
-          } else if (topologyMutation && currentCount > 1u) {
-            candidateCount = currentCount - 1u;
-          }
-        }
+        let targetShapeIndex = min(
+          u32(random01(params.seed + candidateIndex * 0x85ebca6bu + 0x1b56c4e9u) * f32(currentCount)),
+          currentCount - 1u
+        );
+        let targetVertexCount = u32(best[targetShapeIndex].properties.x);
+        let addVertex = topologyMutation && topologyRoll >= 0.5 && topologyRoll < 0.75
+          && targetVertexCount < min(params.maxVertices, MAX_VERTICES);
+        let removeVertex = topologyMutation && topologyRoll >= 0.75 && targetVertexCount > 3u;
+        let shapeChange = topologyMutation && !addVertex && !removeVertex;
+        let shapeRoll = random01(params.seed + candidateIndex * 0x85ebca6bu + 0x392ab741u);
+        let addShape = shapeChange && (shapeRoll < 0.5 || currentCount == 1u) && currentCount < MAX_SHAPES;
+        let removeShape = shapeChange && !addShape && currentCount > 1u;
+        candidateCount = currentCount;
+        if (addShape) { candidateCount = min(currentCount + 1u, MAX_SHAPES); }
+        if (removeShape) { candidateCount = currentCount - 1u; }
         if (i == 0u) { candidateCounts[candidateIndex] = candidateCount; }
         if (params.initial == 1u) {
           if (i >= params.count) { return; }
-          let ax = random01(seed + 1u);
-          let ay = random01(seed + 2u);
-          let bx = random01(seed + 3u);
-          let by = random01(seed + 4u);
-          let cx = random01(seed + 5u);
-          let cy = random01(seed + 6u);
-          candidate[bufferIndex].a = vec4f(ax, ay, random01(seed + 7u), random01(seed + 8u));
-          candidate[bufferIndex].b = vec4f(bx, by, random01(seed + 9u), 0.15 + random01(seed + 10u) * 0.65);
-          candidate[bufferIndex].c = vec4f(cx, cy, 0.0, 0.0);
+          candidate[bufferIndex] = randomTriangle(seed);
           return;
         }
 
         if (i >= candidateCount) { return; }
-        let adding = params.initial == 0u && candidateCount > currentCount;
-        let removing = params.initial == 0u && candidateCount < currentCount;
-        let removedIndex = min(
-          u32(random01(params.seed + candidateIndex * 0x85ebca6bu + 0x1b56c4e9u) * f32(currentCount)),
+        let removedShapeIndex = min(
+          u32(random01(params.seed + candidateIndex * 0x85ebca6bu + 0x63d83595u) * f32(currentCount)),
           currentCount - 1u
         );
-        if (adding && i == currentCount) {
+        if (addShape && i == currentCount) {
           if (params.focusEnabled == 1u && random01(seed + 35u) < params.focusProbability) {
             let samplePosition = mix(params.focusMin, params.focusMax, vec2f(random01(seed + 36u), random01(seed + 37u)));
             let dims = textureDimensions(targetImage);
@@ -93,26 +103,38 @@ export const mutationShader = `
             candidate[bufferIndex] = sourceTriangle(center, pigment, seed, 0.008 + params.mutation * 0.045);
             return;
           }
-          let ax = random01(seed + 1u);
-          let ay = random01(seed + 2u);
-          let bx = random01(seed + 3u);
-          let by = random01(seed + 4u);
-          let cx = random01(seed + 5u);
-          let cy = random01(seed + 6u);
-          candidate[bufferIndex].a = vec4f(ax, ay, random01(seed + 7u), random01(seed + 8u));
-          candidate[bufferIndex].b = vec4f(bx, by, random01(seed + 9u), 0.15 + random01(seed + 10u) * 0.65);
-          candidate[bufferIndex].c = vec4f(cx, cy, 0.0, 0.0);
+          candidate[bufferIndex] = randomTriangle(seed);
           return;
         }
         var sourceIndex = i;
-        if (removing && i >= removedIndex) { sourceIndex += 1u; }
-        var triangle = best[sourceIndex];
+        if (removeShape && i >= removedShapeIndex) { sourceIndex += 1u; }
+        var shape = best[sourceIndex];
         if (topologyMutation) {
-          candidate[bufferIndex] = triangle;
+          if (addVertex && sourceIndex == targetShapeIndex) {
+            let pointCount = u32(shape.properties.x);
+            let edgeIndex = min(u32(random01(seed + 28u) * f32(pointCount)), pointCount - 1u);
+            let nextIndex = (edgeIndex + 1u) % pointCount;
+            let amount = 0.25 + random01(seed + 29u) * 0.5;
+            let newPoint = mix(shape.points[edgeIndex], shape.points[nextIndex], amount);
+            for (var point = pointCount; point > edgeIndex + 1u; point -= 1u) {
+              shape.points[point] = shape.points[point - 1u];
+            }
+            shape.points[edgeIndex + 1u] = clamp(newPoint, vec2f(0.0), vec2f(1.0));
+            shape.properties.x = f32(pointCount + 1u);
+          }
+          if (removeVertex && sourceIndex == targetShapeIndex) {
+            let pointCount = u32(shape.properties.x);
+            let removedPoint = min(u32(random01(seed + 32u) * f32(pointCount)), pointCount - 1u);
+            for (var point = removedPoint; point + 1u < pointCount; point += 1u) {
+              shape.points[point] = shape.points[point + 1u];
+            }
+            shape.properties.x = f32(pointCount - 1u);
+          }
+          candidate[bufferIndex] = shape;
           return;
         }
         if (params.initial == 2u && candidateIndex == 0u) {
-          candidate[bufferIndex] = triangle;
+          candidate[bufferIndex] = shape;
           return;
         }
         let guidedIndex = candidateIndex % candidateCount;
@@ -154,41 +176,31 @@ export const mutationShader = `
         let chance = random01(seed + 11u);
         if (chance < 0.085) {
           let amount = params.mutation;
-          triangle.a.x = clamp(triangle.a.x + signedRandom(seed + 12u) * amount * 0.16, 0.0, 1.0);
-          triangle.a.y = clamp(triangle.a.y + signedRandom(seed + 13u) * amount * 0.16, 0.0, 1.0);
-          triangle.b.x = clamp(triangle.b.x + signedRandom(seed + 14u) * amount * 0.16, 0.0, 1.0);
-          triangle.b.y = clamp(triangle.b.y + signedRandom(seed + 15u) * amount * 0.16, 0.0, 1.0);
-          triangle.c.x = clamp(triangle.c.x + signedRandom(seed + 16u) * amount * 0.16, 0.0, 1.0);
-          triangle.c.y = clamp(triangle.c.y + signedRandom(seed + 17u) * amount * 0.16, 0.0, 1.0);
+          let pointCount = u32(shape.properties.x);
+          for (var point = 0u; point < pointCount; point += 1u) {
+            shape.points[point].x = clamp(shape.points[point].x + signedRandom(seed + 12u + point * 2u) * amount * 0.16, 0.0, 1.0);
+            shape.points[point].y = clamp(shape.points[point].y + signedRandom(seed + 13u + point * 2u) * amount * 0.16, 0.0, 1.0);
+          }
         }
         if (random01(seed + 18u) < 0.12) {
           let amount = params.mutation * 0.22;
-          triangle.a.z = clamp(triangle.a.z + signedRandom(seed + 19u) * amount, 0.0, 1.0);
-          triangle.a.w = clamp(triangle.a.w + signedRandom(seed + 20u) * amount, 0.0, 1.0);
-          triangle.b.z = clamp(triangle.b.z + signedRandom(seed + 21u) * amount, 0.0, 1.0);
+          shape.color.r = clamp(shape.color.r + signedRandom(seed + 19u) * amount, 0.0, 1.0);
+          shape.color.g = clamp(shape.color.g + signedRandom(seed + 20u) * amount, 0.0, 1.0);
+          shape.color.b = clamp(shape.color.b + signedRandom(seed + 21u) * amount, 0.0, 1.0);
         }
         if (random01(seed + 22u) < 0.1) {
-          triangle.b.w = clamp(triangle.b.w + signedRandom(seed + 23u) * params.mutation * 0.25, 0.03, 0.9);
+          shape.color.a = clamp(shape.color.a + signedRandom(seed + 23u) * params.mutation * 0.25, 0.03, 0.9);
         }
         if (random01(seed + 24u) < 0.008) {
-          let point = random01(seed + 25u);
-          if (point < 0.333) {
-            triangle.a.x = random01(seed + 26u);
-            triangle.a.y = random01(seed + 27u);
-          } else if (point < 0.666) {
-            triangle.b.x = random01(seed + 28u);
-            triangle.b.y = random01(seed + 29u);
-          } else {
-            triangle.c.x = random01(seed + 30u);
-            triangle.c.y = random01(seed + 31u);
-          }
+          let point = min(u32(random01(seed + 25u) * shape.properties.x), u32(shape.properties.x) - 1u);
+          shape.points[point] = vec2f(random01(seed + 26u), random01(seed + 27u));
         }
-        candidate[bufferIndex] = triangle;
+        candidate[bufferIndex] = shape;
       }
     `;
 
 export const evaluationShader = `
-      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, padding0: u32, focusMin: vec2f, focusMax: vec2f };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, maxVertices: u32, focusMin: vec2f, focusMax: vec2f };
       const ATLAS_COLUMNS: u32 = 23u;
       @group(0) @binding(0) var targetImage: texture_2d<f32>;
       @group(0) @binding(1) var candidateAtlas: texture_2d<f32>;
@@ -227,11 +239,11 @@ export const evaluationShader = `
     `;
 
 export const finalizeShader = `
-      struct Triangle { a: vec4f, b: vec4f, c: vec4f };
-      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, padding0: u32, focusMin: vec2f, focusMax: vec2f };
-      const MAX_TRIANGLES: u32 = 512u;
-      @group(0) @binding(0) var<storage, read> candidate: array<Triangle>;
-      @group(0) @binding(1) var<storage, read_write> best: array<Triangle>;
+      struct Shape { points: array<vec2f, 8>, color: vec4f, properties: vec4f };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, maxVertices: u32, focusMin: vec2f, focusMax: vec2f };
+      const MAX_SHAPES: u32 = 512u;
+      @group(0) @binding(0) var<storage, read> candidate: array<Shape>;
+      @group(0) @binding(1) var<storage, read_write> best: array<Shape>;
       @group(0) @binding(2) var<storage, read_write> score: array<atomic<u32>>;
       @group(0) @binding(3) var<storage, read_write> bestScore: array<atomic<u32>>;
       @group(0) @binding(4) var<uniform> params: Params;
@@ -246,7 +258,7 @@ export const finalizeShader = `
           if (candidateScore < scoreToBeat) {
             let count = candidateCounts[candidateIndex];
             for (var i = 0u; i < count; i += 1u) {
-              best[i] = candidate[candidateIndex * MAX_TRIANGLES + i];
+              best[i] = candidate[candidateIndex * MAX_SHAPES + i];
             }
             scoreToBeat = candidateScore;
             atomicStore(&bestScore[0], candidateScore);
@@ -257,10 +269,11 @@ export const finalizeShader = `
     `;
 
 export const rasterShader = `
-      struct Triangle { a: vec4f, b: vec4f, c: vec4f };
-      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, padding0: u32, focusMin: vec2f, focusMax: vec2f };
-      const MAX_TRIANGLES: u32 = 512u;
-      @group(0) @binding(0) var<storage, read> candidate: array<Triangle>;
+      struct Shape { points: array<vec2f, 8>, color: vec4f, properties: vec4f };
+      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, maxVertices: u32, focusMin: vec2f, focusMax: vec2f };
+      const MAX_SHAPES: u32 = 512u;
+      const FAN_TRIANGLES: u32 = 6u;
+      @group(0) @binding(0) var<storage, read> candidate: array<Shape>;
       @group(0) @binding(1) var<storage, read> candidateCounts: array<u32>;
       @group(0) @binding(2) var<uniform> params: Params;
 
@@ -280,17 +293,23 @@ export const rasterShader = `
         output.opacity = 0.0;
         let candidateIndex = params.batchStart + localCandidate;
         let triangleIndex = vertexIndex / 3u;
-        if (triangleIndex >= candidateCounts[candidateIndex]) {
+        let shapeIndex = triangleIndex / FAN_TRIANGLES;
+        let fanIndex = triangleIndex % FAN_TRIANGLES;
+        if (shapeIndex >= candidateCounts[candidateIndex]) {
           output.position = vec4f(2.0, 2.0, 0.0, 1.0);
           return output;
         }
-        let triangle = candidate[candidateIndex * MAX_TRIANGLES + triangleIndex];
-        var point = triangle.a.xy;
-        if (vertexIndex % 3u == 1u) { point = triangle.b.xy; }
-        if (vertexIndex % 3u == 2u) { point = triangle.c.xy; }
+        let shape = candidate[candidateIndex * MAX_SHAPES + shapeIndex];
+        if (fanIndex + 2u >= u32(shape.properties.x)) {
+          output.position = vec4f(2.0, 2.0, 0.0, 1.0);
+          return output;
+        }
+        var point = shape.points[0];
+        if (vertexIndex % 3u == 1u) { point = shape.points[fanIndex + 1u]; }
+        if (vertexIndex % 3u == 2u) { point = shape.points[fanIndex + 2u]; }
         output.position = vec4f(point.x * 2.0 - 1.0, 1.0 - point.y * 2.0, 0.0, 1.0);
-        output.color = vec3f(triangle.a.z, triangle.a.w, triangle.b.z);
-        output.opacity = triangle.b.w;
+        output.color = shape.color.rgb;
+        output.opacity = shape.color.a;
         return output;
       }
 

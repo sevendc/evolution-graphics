@@ -1,6 +1,6 @@
 # Form & Signal — Image Evolution
 
-A browser-based WebGPU experiment that evolves a picture from translucent triangles. Candidate genomes are rendered and scored on your GPU, and the best result is shown alongside the target as evolution progresses.
+A browser-based WebGPU experiment that evolves a picture from translucent polygon shapes. Candidate genomes are rendered and scored on your GPU, and the best result is shown alongside the target as evolution progresses.
 
 On wide screens, focus and simplification (steps 4 and 5) appear in their own panel to the right of the main controls. At narrower widths, that panel moves below the image and main controls.
 
@@ -25,14 +25,16 @@ Open [http://localhost:8080](http://localhost:8080). The server binds to `127.0.
 ## Use
 
 1. Choose **Upload image**, **Use camera**, or **Try sample** to set the target. Camera access requires permission; image upload and the built-in sample are alternatives.
-2. Set the starting triangle count, mutation strength, structural mutation chance, and candidates per generation.
+2. Set the starting shape count, mutation strength, shape/point change chance, maximum points per shape, and candidates per generation.
 3. Select **Start evolution**. Pause or resume with the same button; use the reset button to restart with the current settings.
-4. Drag a rectangle on the target image to focus some guided mutations on that area. Adjust **Guided mutations in selection** to control how often guided mutations target it; focused proposals mix high-error samples with random samples from the target image, using sampled colors and varied triangle shapes to add detail. Clear the selection to return to global guidance. Fitness still scores the full image.
+4. Drag a rectangle on the target image to focus some guided mutations on that area. Adjust **Guided mutations in selection** to control how often guided mutations target it; focused proposals mix high-error samples with random samples from the target image, using sampled colors and varied polygon shapes to add detail. Clear the selection to return to global guidance. Fitness still scores the full image.
 5. Compare the best candidate with the target. A lower multi-scale error means a closer match. Live statistics are shown below the image comparison.
-6. Once a result is available, choose a removal percentage and analyze simplification. The app scores leave-one-triangle-out variants, previews removing the least-impactful triangles, and shows the fitness change. Keep the preview to continue from the smaller genome, or discard it to restore the previous result.
+6. Once a result is available, choose a removal percentage and analyze simplification. The app scores leave-one-shape-out variants, previews removing the least-impactful shapes, and shows the fitness change. Keep the preview to continue from the smaller genome, or discard it to restore the previous result.
 7. Save the evolved image as PNG or export its genome as TOON. Import a TOON file or paste its text to seed a run.
 
-The genome supports up to 512 triangles and the population setting ranges up to 2,048 candidates per generation. Larger values can use substantially more GPU time; reduce the population if the page becomes sluggish. Changing the starting triangle count resets evolution, while population and structural mutation settings can be adjusted during a run.
+The genome supports up to 512 shapes and 8 points per shape; the complexity slider controls the mutation limit, from triangles (3 points) through octagons. The population setting ranges up to 2,048 candidates per generation. Larger values can use substantially more GPU time; reduce the population if the page becomes sluggish. Changing the starting shape count resets evolution, while population, structural mutation, and complexity settings can be adjusted during a run.
+
+TOON version 1 triangle genomes remain supported and are still exported when every shape has three points. Genomes containing polygons use TOON version 2 with a `shapes[N]{vertices,r,g,b,opacity,points}:` table; each row stores the point count, color, opacity, then its x/y point pairs.
 
 ## Project files
 
