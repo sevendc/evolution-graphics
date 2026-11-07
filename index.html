@@ -38,14 +38,12 @@
               <div id="selectionOverlay" class="selection-overlay" role="group" aria-label="Drag to select an area to focus evolution on" aria-disabled="true">
                 <div id="selectionBox" class="selection-box"></div>
               </div>
-              <div id="targetEmpty" class="empty-note">Choose an image, capture a frame,<br>or try the sample artwork.</div>
             </div>
           </div>
           <div class="image-card">
             <div class="image-heading"><div class="image-title"><span class="image-index">02</span> Evolved</div><span class="image-tag">BEST CANDIDATE</span></div>
             <div class="canvas-wrap">
               <canvas id="resultCanvas" width="160" height="160" aria-label="Best evolved image"></canvas>
-              <div id="resultEmpty" class="empty-note">Your best candidate<br>will appear here.</div>
             </div>
           </div>
         </div>
@@ -77,10 +75,16 @@
             <button id="sampleButton" class="button" type="button">✳ &nbsp; Try sample</button>
           </div>
           <input id="imageInput" class="hidden-input" type="file" accept="image/*">
-          <div class="camera-wrap">
-            <button id="cameraButton" class="button ghost wide" type="button">◎ &nbsp; Use camera</button>
-            <video id="cameraVideo" playsinline autoplay muted></video>
-            <button id="captureButton" class="button primary camera-capture" type="button">Capture frame as target</button>
+          <div class="setting">
+            <div class="setting-head"><label for="resolutionSelect">Working image size</label></div>
+            <select id="resolutionSelect" class="select-control">
+              <option value="160">160 × 160 / fastest</option>
+              <option value="256">256 × 256</option>
+              <option value="320">320 × 320</option>
+              <option value="512">512 × 512</option>
+              <option value="1024">1024 × 1024 / most detail</option>
+            </select>
+            <div class="setting-help">Higher resolutions preserve more detail but need more GPU time.</div>
           </div>
         </div>
 
@@ -108,8 +112,8 @@
           </div>
           <div class="setting">
             <div class="setting-head"><label for="mutationRange">Mutation strength</label><span id="mutationValue" class="setting-value">0.35</span></div>
-            <input id="mutationRange" type="range" min="1" max="90" step="1" value="35">
-            <div class="range-hints"><span>0.01 / tiny</span><span>0.90 / bold</span></div>
+            <input id="mutationRange" type="range" min="0.001" max="0.7" step="0.001" value="0.35">
+            <div class="range-hints"><span>0.001 / tiny</span><span>0.7 / bold</span></div>
             <div class="setting-help">Scales position, color, and opacity edits.</div>
           </div>
           <div class="setting">
@@ -120,8 +124,8 @@
           </div>
           <div class="setting">
             <div class="setting-head"><label for="complexityRange">Maximum points per shape</label><span id="complexityValue" class="setting-value">3</span></div>
-            <input id="complexityRange" type="range" min="3" max="8" step="1" value="3">
-            <div class="range-hints"><span>3 / triangles</span><span>8 / complex polygons</span></div>
+            <input id="complexityRange" type="range" min="3" max="16" step="1" value="3">
+            <div class="range-hints"><span>3 / triangles</span><span>16 / complex polygons</span></div>
             <div class="setting-help">Structural mutations can add points up to this limit. Lower it to keep shapes simpler.</div>
           </div>
           <div class="setting">

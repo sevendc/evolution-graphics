@@ -1,8 +1,8 @@
 export const mutationShader = `
-      struct Shape { points: array<vec2f, 8>, color: vec4f, properties: vec4f };
+      struct Shape { points: array<vec2f, 16>, color: vec4f, properties: vec4f };
       struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, maxVertices: u32, focusMin: vec2f, focusMax: vec2f };
       const MAX_SHAPES: u32 = 512u;
-      const MAX_VERTICES: u32 = 8u;
+      const MAX_VERTICES: u32 = 16u;
       @group(0) @binding(0) var<storage, read_write> candidate: array<Shape>;
       @group(0) @binding(1) var<storage, read> best: array<Shape>;
       @group(0) @binding(2) var<uniform> params: Params;
@@ -56,7 +56,7 @@ export const mutationShader = `
         let i = id.x;
         let candidateIndex = params.batchStart + id.y;
         if (i >= MAX_SHAPES || id.y >= params.batchCount) { return; }
-        let bufferIndex = candidateIndex * MAX_SHAPES + i;
+        let bufferIndex = id.y * MAX_SHAPES + i;
         let seed = params.seed + candidateIndex * 0x85ebca6bu + i * 0x9e3779b9u;
         let currentCount = atomicLoad(&bestCount[0]);
         var candidateCount = params.count;
@@ -200,8 +200,8 @@ export const mutationShader = `
     `;
 
 export const evaluationShader = `
-      struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, maxVertices: u32, focusMin: vec2f, focusMax: vec2f };
-      const ATLAS_COLUMNS: u32 = 23u;
+      struct Params { count: u32, atlasColumns: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, maxVertices: u32, focusMin: vec2f, focusMax: vec2f };
+      const REFERENCE_PIXELS: f32 = 25600.0;
       @group(0) @binding(0) var targetImage: texture_2d<f32>;
       @group(0) @binding(1) var candidateAtlas: texture_2d<f32>;
       @group(0) @binding(2) var<storage, read_write> score: array<atomic<u32>>;
@@ -214,7 +214,7 @@ export const evaluationShader = `
         if (id.x >= dims.x || id.y >= dims.y || id.z >= params.batchCount) { return; }
         let pixel = vec2u(id.xy);
         let candidateIndex = params.batchStart + id.z;
-        let tile = vec2u(id.z % ATLAS_COLUMNS, id.z / ATLAS_COLUMNS) * dims;
+        let tile = vec2u(id.z % params.atlasColumns, id.z / params.atlasColumns) * dims;
         let atlasPixel = vec2i(tile + pixel);
         let fullDifference = textureLoad(candidateAtlas, atlasPixel, 0).rgb - textureLoad(targetImage, vec2i(pixel), 0).rgb;
         var weightedError = dot(fullDifference, fullDifference);
@@ -234,12 +234,13 @@ export const evaluationShader = `
           let difference = textureLoad(candidateAtlas, vec2i(tile + samplePixel), 0).rgb - textureLoad(targetImage, vec2i(samplePixel), 0).rgb;
           weightedError += dot(difference, difference) * 64.0;
         }
-        atomicAdd(&score[candidateIndex], u32(round(weightedError * 10000.0)));
+        let resolutionScale = REFERENCE_PIXELS / f32(dims.x * dims.y);
+        atomicAdd(&score[candidateIndex], u32(round(weightedError * 10000.0 * resolutionScale)));
       }
     `;
 
 export const finalizeShader = `
-      struct Shape { points: array<vec2f, 8>, color: vec4f, properties: vec4f };
+      struct Shape { points: array<vec2f, 16>, color: vec4f, properties: vec4f };
       struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, maxVertices: u32, focusMin: vec2f, focusMax: vec2f };
       const MAX_SHAPES: u32 = 512u;
       @group(0) @binding(0) var<storage, read> candidate: array<Shape>;
@@ -258,7 +259,7 @@ export const finalizeShader = `
           if (candidateScore < scoreToBeat) {
             let count = candidateCounts[candidateIndex];
             for (var i = 0u; i < count; i += 1u) {
-              best[i] = candidate[candidateIndex * MAX_SHAPES + i];
+              best[i] = candidate[localIndex * MAX_SHAPES + i];
             }
             scoreToBeat = candidateScore;
             atomicStore(&bestScore[0], candidateScore);
@@ -269,10 +270,10 @@ export const finalizeShader = `
     `;
 
 export const rasterShader = `
-      struct Shape { points: array<vec2f, 8>, color: vec4f, properties: vec4f };
+      struct Shape { points: array<vec2f, 16>, color: vec4f, properties: vec4f };
       struct Params { count: u32, population: u32, seed: u32, initial: u32, mutation: f32, guideReady: u32, batchStart: u32, batchCount: u32, structuralMutation: f32, focusEnabled: u32, focusProbability: f32, maxVertices: u32, focusMin: vec2f, focusMax: vec2f };
       const MAX_SHAPES: u32 = 512u;
-      const FAN_TRIANGLES: u32 = 6u;
+      const FAN_TRIANGLES: u32 = 14u;
       @group(0) @binding(0) var<storage, read> candidate: array<Shape>;
       @group(0) @binding(1) var<storage, read> candidateCounts: array<u32>;
       @group(0) @binding(2) var<uniform> params: Params;
@@ -299,7 +300,7 @@ export const rasterShader = `
           output.position = vec4f(2.0, 2.0, 0.0, 1.0);
           return output;
         }
-        let shape = candidate[candidateIndex * MAX_SHAPES + shapeIndex];
+        let shape = candidate[localCandidate * MAX_SHAPES + shapeIndex];
         if (fanIndex + 2u >= u32(shape.properties.x)) {
           output.position = vec4f(2.0, 2.0, 0.0, 1.0);
           return output;

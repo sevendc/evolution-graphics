@@ -9,7 +9,9 @@ export function drawSourceCover(source, context, size) {
 }
 
 export function makeSampleArtwork(context, size) {
-  const gradient = context.createLinearGradient(0, 0, size, size);
+  context.save();
+  context.scale(size / 160, size / 160);
+  const gradient = context.createLinearGradient(0, 0, 160, 160);
   gradient.addColorStop(0, "#b8c5a1");
   gradient.addColorStop(.52, "#637b68");
   gradient.addColorStop(1, "#253e46");
@@ -49,21 +51,26 @@ export function makeSampleArtwork(context, size) {
   context.lineTo(160, 160);
   context.lineTo(0, 160);
   context.fill();
+  context.restore();
 }
 
-export async function loadImageFile(file, { context, size, setImageName, stopCamera, targetReady, setNotice, reportError }) {
+export async function loadImageFile(file, { context, size, setImageName, setImageSource, stopCamera, targetReady, setNotice, reportError }) {
   if (!file || !file.type.startsWith("image/")) {
     setNotice("Choose a supported image file.", true);
     return;
   }
+  let bitmap;
   try {
-    const bitmap = await createImageBitmap(file);
+    bitmap = await createImageBitmap(file);
     drawSourceCover(bitmap, context, size);
-    bitmap.close();
+    setImageSource(bitmap);
+    bitmap = null;
     setImageName(file.name.replace(/\.[^.]+$/, "") || "image");
     stopCamera();
     await targetReady();
   } catch (error) {
     reportError(error);
+  } finally {
+    bitmap?.close();
   }
 }

@@ -24,7 +24,7 @@ Open [http://localhost:8080](http://localhost:8080). The server binds to `127.0.
 
 ## Use
 
-1. Choose **Upload image**, **Use camera**, or **Try sample** to set the target. Camera access requires permission; image upload and the built-in sample are alternatives.
+1. Choose **Upload image** or **Try sample** to set the target, then select a working image size from 160 × 160 to 1,024 × 1,024. Larger sizes preserve more detail but need more GPU time; changing the size restarts evolution.
 2. Set the starting shape count, mutation strength, shape/point change chance, maximum points per shape, and candidates per generation.
 3. Select **Start evolution**. Pause or resume with the same button; use the reset button to restart with the current settings.
 4. Drag a rectangle on the target image to focus some guided mutations on that area. Adjust **Guided mutations in selection** to control how often guided mutations target it; focused proposals mix high-error samples with random samples from the target image, using sampled colors and varied polygon shapes to add detail. Clear the selection to return to global guidance. Fitness still scores the full image.
@@ -32,7 +32,7 @@ Open [http://localhost:8080](http://localhost:8080). The server binds to `127.0.
 6. Once a result is available, choose a removal percentage and analyze simplification. The app scores leave-one-shape-out variants, previews removing the least-impactful shapes, and shows the fitness change. Keep the preview to continue from the smaller genome, or discard it to restore the previous result.
 7. Save the evolved image as PNG or export its genome as TOON. Import a TOON file or paste its text to seed a run.
 
-The genome supports up to 512 shapes and 8 points per shape; the complexity slider controls the mutation limit, from triangles (3 points) through octagons. The population setting ranges up to 2,048 candidates per generation. Larger values can use substantially more GPU time; reduce the population if the page becomes sluggish. Changing the starting shape count resets evolution, while population, structural mutation, and complexity settings can be adjusted during a run.
+The genome supports up to 512 shapes and 16 points per shape; the complexity slider controls the mutation limit, from triangles (3 points) through 16-point polygons. Mutation strength ranges from 0.001 to 0.7. The population setting ranges up to 2,048 candidates per generation. Larger values can use substantially more GPU time; reduce the population if the page becomes sluggish. Changing the starting shape count resets evolution, while population, structural mutation, and complexity settings can be adjusted during a run.
 
 TOON version 1 triangle genomes remain supported and are still exported when every shape has three points. Genomes containing polygons use TOON version 2 with a `shapes[N]{vertices,r,g,b,opacity,points}:` table; each row stores the point count, color, opacity, then its x/y point pairs.
 

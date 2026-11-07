@@ -1,4 +1,4 @@
-const MAX_VERTICES = 8;
+const MAX_VERTICES = 16;
 const SHAPE_FLOATS = MAX_VERTICES * 2 + 8;
 
 export function parseToonGenome(text, minCount, maxCount) {
@@ -48,12 +48,9 @@ export function parseToonGenome(text, minCount, maxCount) {
       if (values.length !== 10) {
         throw new Error(`Invalid triangle data on TOON row ${i + 1}. Each row needs ten values.`);
       }
-      genome.set([
-        values[0], values[1], values[2], values[3], values[4], values[5],
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        values[6], values[7], values[8], values[9],
-        3, 0, 0, 0
-      ], offset);
+      genome.set(values.slice(0, 6), offset);
+      genome.set(values.slice(6, 10), offset + MAX_VERTICES * 2);
+      genome[offset + MAX_VERTICES * 2 + 4] = 3;
       continue;
     }
 
@@ -77,19 +74,20 @@ export function serializeToonGenome(raw, count, resolution, fitness) {
   const vertexCounts = Array.from({ length: count }, (_, index) => raw[index * SHAPE_FLOATS + MAX_VERTICES * 2 + 4]);
   const legacy = vertexCounts.every((vertexCount) => vertexCount === 3);
   const rows = [];
+  const colorOffset = MAX_VERTICES * 2;
   for (let i = 0; i < count; i += 1) {
     const offset = i * SHAPE_FLOATS;
     const vertexCount = vertexCounts[i];
     if (legacy) {
       const values = [
         raw[offset], raw[offset + 1], raw[offset + 2], raw[offset + 3], raw[offset + 4], raw[offset + 5],
-        raw[offset + 16], raw[offset + 17], raw[offset + 18], raw[offset + 19]
+        raw[offset + colorOffset], raw[offset + colorOffset + 1], raw[offset + colorOffset + 2], raw[offset + colorOffset + 3]
       ];
       rows.push(`  ${values.map((value) => Number(value.toFixed(6))).join(",")}`);
     } else {
       const values = [
         vertexCount,
-        raw[offset + 16], raw[offset + 17], raw[offset + 18], raw[offset + 19]
+        raw[offset + colorOffset], raw[offset + colorOffset + 1], raw[offset + colorOffset + 2], raw[offset + colorOffset + 3]
       ];
       for (let vertex = 0; vertex < vertexCount; vertex += 1) {
         values.push(raw[offset + vertex * 2], raw[offset + vertex * 2 + 1]);

@@ -2,22 +2,23 @@ import { mutationShader, evaluationShader, finalizeShader, rasterShader, guideSh
 import { downloadBlob, parseToonGenome, safeFilename, serializeToonGenome } from "./genome.js";
 import { drawSourceCover, loadImageFile as loadTargetImage, makeSampleArtwork } from "./media.js";
 
-const SIZE = 160;
-const IMAGE_BYTES_PER_ROW = Math.ceil(SIZE * 4 / 256) * 256;
+let SIZE = 160;
+let IMAGE_BYTES_PER_ROW = Math.ceil(SIZE * 4 / 256) * 256;
 const REPORT_EVERY = 5;
 const MAX_POPULATION = 2048;
 const MAX_SHAPES = 512;
-const MAX_VERTICES = 8;
+const MAX_VERTICES = 16;
 const SHAPE_FLOATS = MAX_VERTICES * 2 + 8;
 const SHAPE_BYTES = SHAPE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const SCORE_NORMALIZER = 160 * 160 * 4 * 10000;
 const CANDIDATE_BATCH_SIZE = 512;
-const ATLAS_COLUMNS = 23;
-const ATLAS_ROWS = Math.ceil(CANDIDATE_BATCH_SIZE / ATLAS_COLUMNS);
+const MAX_ATLAS_PIXELS = 23 * 23 * 160 * 160;
 const targetCanvas = document.querySelector("#targetCanvas");
 const resultCanvas = document.querySelector("#resultCanvas");
 const targetContext = targetCanvas.getContext("2d", { willReadFrequently: true });
 const resultContext = resultCanvas.getContext("2d");
 const imageInput = document.querySelector("#imageInput");
+const resolutionSelect = document.querySelector("#resolutionSelect");
 const runButton = document.querySelector("#runButton");
 const resetButton = document.querySelector("#resetButton");
 const notice = document.querySelector("#notice");
@@ -48,6 +49,9 @@ let bestError = Infinity;
 let initialError = Infinity;
 let running = false;
 let targetLoaded = false;
+let targetBitmap = null;
+let sampleTarget = true;
+let resolutionChanging = false;
 let cameraStream = null;
 let busy = false;
 let lastReportTime = 0;
@@ -83,7 +87,7 @@ function updateControlLabels() {
   document.querySelector("#triangleValue").textContent = count;
   document.querySelector("#footerTriangleCount").textContent = count;
   updateGenomeSize(count);
-  document.querySelector("#mutationValue").textContent = (Number(mutationRange.value) / 100).toFixed(2);
+  document.querySelector("#mutationValue").textContent = Number(mutationRange.value).toFixed(3);
   document.querySelector("#structureValue").textContent = `${Number(structureRange.value).toFixed(1)}%`;
   document.querySelector("#complexityValue").textContent = complexityRange.value;
   document.querySelector("#populationValue").textContent = populationRange.value;
@@ -94,15 +98,17 @@ function updateControlLabels() {
 }
 
 function syncDecimationControls() {
-  const locked = decimationBusy || decimationPreview !== null;
+  const locked = decimationBusy || decimationPreview !== null || resolutionChanging;
   const unavailable = !gpu?.ready || !Number.isFinite(bestError);
   selectionOverlay.setAttribute("aria-disabled", String(!targetLoaded || locked));
-  for (const id of ["uploadButton", "sampleButton", "cameraButton", "captureButton", "toonUploadButton", "toonImportButton", "imageInput", "toonFileInput", "toonText"]) {
-    document.querySelector(`#${id}`).disabled = locked;
+  for (const id of ["uploadButton", "sampleButton", "toonUploadButton", "toonImportButton", "imageInput", "toonFileInput", "toonText"]) {
+    const control = document.querySelector(`#${id}`);
+    if (control) control.disabled = locked;
   }
   runButton.disabled = locked || !gpu?.ready;
   resetButton.disabled = locked || !gpu?.ready;
   triangleRange.disabled = locked || running;
+  resolutionSelect.disabled = locked || running || !gpu?.ready;
   mutationRange.disabled = locked;
   structureRange.disabled = locked;
   complexityRange.disabled = locked;
@@ -182,9 +188,66 @@ function updateGenomeSize(count) {
 }
 
 function makeSample() {
+  targetBitmap?.close();
+  targetBitmap = null;
+  sampleTarget = true;
   makeSampleArtwork(targetContext, SIZE);
   selectedImageName = "sample";
   targetReady().catch(reportError);
+}
+
+function setTargetBitmap(bitmap) {
+  targetBitmap?.close();
+  targetBitmap = bitmap;
+  sampleTarget = false;
+}
+
+function getCandidateAtlasLayout() {
+  const maxDimension = device.limits.maxTextureDimension2D;
+  if (SIZE > maxDimension) {
+    throw new Error(`The selected ${SIZE} × ${SIZE} working size is not supported by this GPU.`);
+  }
+  const maxColumns = Math.floor(maxDimension / SIZE);
+  const maxCells = maxColumns * maxColumns;
+  const pixelBudgetCells = Math.floor(MAX_ATLAS_PIXELS / (SIZE * SIZE));
+  const batchSize = Math.max(1, Math.min(CANDIDATE_BATCH_SIZE, maxCells, pixelBudgetCells));
+  const atlasColumns = Math.min(maxColumns, Math.ceil(Math.sqrt(batchSize)));
+  const atlasRows = Math.ceil(batchSize / atlasColumns);
+  return { batchSize, atlasColumns, atlasRows };
+}
+
+async function changeWorkingResolution() {
+  if (!Array.from(resolutionSelect.options).some((option) => option.value === resolutionSelect.value)) {
+    resolutionSelect.value = String(SIZE);
+    setNotice("Choose one of the listed working image sizes.", true);
+    return;
+  }
+  const newSize = Number(resolutionSelect.value);
+  if (newSize === SIZE) return;
+  resolutionChanging = true;
+  setRunning(false);
+  syncDecimationControls();
+  try {
+    await waitForEvolutionToStop();
+    SIZE = newSize;
+    IMAGE_BYTES_PER_ROW = Math.ceil(SIZE * 4 / 256) * 256;
+    targetCanvas.width = SIZE;
+    targetCanvas.height = SIZE;
+    resultCanvas.width = SIZE;
+    resultCanvas.height = SIZE;
+    if (targetBitmap) {
+      drawSourceCover(targetBitmap, targetContext, SIZE);
+    } else if (sampleTarget) {
+      makeSampleArtwork(targetContext, SIZE);
+    } else {
+      setNotice("The original target image is no longer available. Upload it again to change working size.", true);
+      return;
+    }
+    await targetReady();
+  } finally {
+    resolutionChanging = false;
+    syncDecimationControls();
+  }
 }
 
 async function waitForEvolutionToStop() {
@@ -227,8 +290,6 @@ async function targetReady() {
   document.querySelector("#decimateSummary").textContent = "";
   targetLoaded = true;
   const count = Number(triangleRange.value);
-  document.querySelector("#targetEmpty").hidden = true;
-  document.querySelector("#resultEmpty").hidden = false;
   resultContext.clearRect(0, 0, SIZE, SIZE);
   document.querySelector("#fitnessValue").textContent = "—";
   document.querySelector("#fitnessNote").innerHTML = "Lower is closer<br>to the target";
@@ -313,8 +374,9 @@ async function initializeEvolution() {
   if (!device || !targetLoaded) return;
   const count = Number(triangleRange.value);
   const population = Number(populationRange.value);
+  const atlasLayout = getCandidateAtlasLayout();
   const maxGenomeBytes = MAX_SHAPES * SHAPE_BYTES;
-  const candidateBytes = maxGenomeBytes * MAX_POPULATION;
+  const candidateBytes = maxGenomeBytes * atlasLayout.batchSize;
   if (pendingGenome && pendingGenome.length !== count * SHAPE_FLOATS) {
     throw new Error("The loaded TOON genome size does not match the shape count control.");
   }
@@ -337,7 +399,7 @@ async function initializeEvolution() {
   });
   const candidateAtlas = device.createTexture({
     label: "candidate render atlas",
-    size: [ATLAS_COLUMNS * SIZE, ATLAS_ROWS * SIZE],
+    size: [atlasLayout.atlasColumns * SIZE, atlasLayout.atlasRows * SIZE],
     format: "rgba8unorm",
     usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC
   });
@@ -419,7 +481,7 @@ async function initializeEvolution() {
     ]
   });
   gpu = {
-    ready: true, count, population, genomeBytes: maxGenomeBytes, candidateBytes, targetTexture, outputTexture, candidateAtlas,
+    ready: true, count, population, ...atlasLayout, genomeBytes: maxGenomeBytes, candidateBytes, targetTexture, outputTexture, candidateAtlas,
     candidateBuffer, bestBuffer, scoreBuffer, bestScoreBuffer, candidateCountsBuffer, bestCountBuffer, errorMapBuffer, paramsBuffer,
     scoreReadback, countReadback, imageReadback, dnaReadback, decimationScoreReadback,
     mutatePipeline, evaluatePipeline, finalizePipeline, guidePipeline, rasterPipeline,
@@ -441,7 +503,6 @@ async function initializeEvolution() {
   lastReportGeneration = 0;
   lastReportCandidateEvaluations = 0;
   resultContext.clearRect(0, 0, SIZE, SIZE);
-  document.querySelector("#resultEmpty").hidden = false;
   document.querySelector("#fitnessValue").textContent = "—";
   document.querySelector("#fitnessNote").innerHTML = "Lower is closer<br>to the target";
   document.querySelector("#generationStat").textContent = "0";
@@ -470,10 +531,10 @@ function writeParams(initial, batchStart = 0, batchCount = gpu.population) {
   const data = new ArrayBuffer(64);
   const view = new DataView(data);
   view.setUint32(0, gpu.count, true);
-  view.setUint32(4, gpu.population, true);
+  view.setUint32(4, gpu.atlasColumns, true);
   view.setUint32(8, seed >>> 0, true);
   view.setUint32(12, initial, true);
-  view.setFloat32(16, Number(mutationRange.value) / 100, true);
+  view.setFloat32(16, Number(mutationRange.value), true);
   view.setUint32(20, gpu.hasGuidance ? 1 : 0, true);
   view.setUint32(24, batchStart, true);
   view.setUint32(28, batchCount, true);
@@ -486,8 +547,8 @@ function writeParams(initial, batchStart = 0, batchCount = gpu.population) {
 
 async function submitGeneration() {
   const initial = generation === 0 ? (gpu.importedGenome ? 2 : 1) : 0;
-  for (let batchStart = 0; batchStart < gpu.population; batchStart += CANDIDATE_BATCH_SIZE) {
-    const batchCount = Math.min(CANDIDATE_BATCH_SIZE, gpu.population - batchStart);
+  for (let batchStart = 0; batchStart < gpu.population; batchStart += gpu.batchSize) {
+    const batchCount = Math.min(gpu.batchSize, gpu.population - batchStart);
     writeParams(initial, batchStart, batchCount);
     const encoder = device.createCommandEncoder({ label: `generation ${generation + 1}, candidates ${batchStart + 1}-${batchStart + batchCount}` });
     encoder.clearBuffer(gpu.scoreBuffer, batchStart * 4, batchCount * 4);
@@ -510,8 +571,8 @@ async function submitGeneration() {
     renderPass.setPipeline(gpu.rasterPipeline);
     renderPass.setBindGroup(0, gpu.rasterGroup);
     for (let localIndex = 0; localIndex < batchCount; localIndex += 1) {
-      const x = (localIndex % ATLAS_COLUMNS) * SIZE;
-      const y = Math.floor(localIndex / ATLAS_COLUMNS) * SIZE;
+      const x = (localIndex % gpu.atlasColumns) * SIZE;
+      const y = Math.floor(localIndex / gpu.atlasColumns) * SIZE;
       renderPass.setViewport(x, y, SIZE, SIZE, 0, 1);
       renderPass.setScissorRect(x, y, SIZE, SIZE);
       renderPass.draw(MAX_SHAPES * (MAX_VERTICES - 2) * 3, 1, 0, localIndex);
@@ -584,12 +645,11 @@ async function updatePreview() {
   gpu.countReadback.unmap();
   gpu.imageReadback.unmap();
   gpu.count = count;
-  const mse = score / (SIZE * SIZE * 4 * 10000);
+  const mse = score / SCORE_NORMALIZER;
   if (Number.isFinite(mse)) {
     bestError = mse;
     if (!Number.isFinite(initialError)) initialError = mse;
     resultContext.putImageData(new ImageData(image, SIZE, SIZE), 0, 0);
-    document.querySelector("#resultEmpty").hidden = true;
     document.querySelector("#fitnessValue").textContent = mse.toFixed(4);
     document.querySelector("#fitnessNote").innerHTML = "1×, ½×, ¼×, ⅛× scales<br>Lower is better";
     document.querySelector("#improvementStat").textContent = `${improvementPercent().toFixed(1)}%`;
@@ -633,59 +693,68 @@ async function readBestGenome() {
   return genome;
 }
 
-function writeEvaluationParams(count, candidateCount) {
+function writeEvaluationParams(count, candidateCount, batchStart = 0) {
   const data = new ArrayBuffer(64);
   const view = new DataView(data);
   view.setUint32(0, count, true);
-  view.setUint32(4, candidateCount, true);
+  view.setUint32(4, gpu.atlasColumns, true);
+  view.setUint32(24, batchStart, true);
   view.setUint32(28, candidateCount, true);
   view.setUint32(44, Number(complexityRange.value), true);
   writeFocusParams(view);
   device.queue.writeBuffer(gpu.paramsBuffer, 0, data);
 }
 
-function submitDecimationEvaluation(candidateCount, triangleCount, readbackBuffer, includePreview = false) {
+function submitDecimationEvaluation(candidateCount, triangleCount, readbackBuffer, includePreview = false, candidateGenomes = null) {
   const candidateCounts = new Uint32Array(candidateCount);
   candidateCounts.fill(triangleCount);
   device.queue.writeBuffer(gpu.candidateCountsBuffer, 0, candidateCounts);
-  writeEvaluationParams(triangleCount, candidateCount);
+  for (let batchStart = 0; batchStart < candidateCount; batchStart += gpu.batchSize) {
+    const batchCount = Math.min(gpu.batchSize, candidateCount - batchStart);
+    if (candidateGenomes) {
+      const start = batchStart * MAX_SHAPES * SHAPE_FLOATS;
+      const end = (batchStart + batchCount) * MAX_SHAPES * SHAPE_FLOATS;
+      device.queue.writeBuffer(gpu.candidateBuffer, 0, candidateGenomes.subarray(start, end));
+    }
+    writeEvaluationParams(triangleCount, batchCount, batchStart);
 
-  const encoder = device.createCommandEncoder({ label: "score simplified genome candidates" });
-  encoder.clearBuffer(gpu.scoreBuffer, 0, candidateCount * 4);
-  const renderPass = encoder.beginRenderPass({
-    label: "rasterize simplification candidates",
-    colorAttachments: [{
-      view: gpu.candidateAtlas.createView(),
-      loadOp: "clear",
-      storeOp: "store",
-      clearValue: { r: 1, g: 1, b: 1, a: 1 }
-    }]
-  });
-  renderPass.setPipeline(gpu.rasterPipeline);
-  renderPass.setBindGroup(0, gpu.rasterGroup);
-  for (let localIndex = 0; localIndex < candidateCount; localIndex += 1) {
-    const x = (localIndex % ATLAS_COLUMNS) * SIZE;
-    const y = Math.floor(localIndex / ATLAS_COLUMNS) * SIZE;
-    renderPass.setViewport(x, y, SIZE, SIZE, 0, 1);
-    renderPass.setScissorRect(x, y, SIZE, SIZE);
-    renderPass.draw(MAX_SHAPES * (MAX_VERTICES - 2) * 3, 1, 0, localIndex);
-  }
-  renderPass.end();
+    const encoder = device.createCommandEncoder({ label: "score simplified genome candidates" });
+    encoder.clearBuffer(gpu.scoreBuffer, batchStart * 4, batchCount * 4);
+    const renderPass = encoder.beginRenderPass({
+      label: "rasterize simplification candidates",
+      colorAttachments: [{
+        view: gpu.candidateAtlas.createView(),
+        loadOp: "clear",
+        storeOp: "store",
+        clearValue: { r: 1, g: 1, b: 1, a: 1 }
+      }]
+    });
+    renderPass.setPipeline(gpu.rasterPipeline);
+    renderPass.setBindGroup(0, gpu.rasterGroup);
+    for (let localIndex = 0; localIndex < batchCount; localIndex += 1) {
+      const x = (localIndex % gpu.atlasColumns) * SIZE;
+      const y = Math.floor(localIndex / gpu.atlasColumns) * SIZE;
+      renderPass.setViewport(x, y, SIZE, SIZE, 0, 1);
+      renderPass.setScissorRect(x, y, SIZE, SIZE);
+      renderPass.draw(MAX_SHAPES * (MAX_VERTICES - 2) * 3, 1, 0, localIndex);
+    }
+    renderPass.end();
 
-  const evaluatePass = encoder.beginComputePass({ label: "score simplification candidates" });
-  evaluatePass.setPipeline(gpu.evaluatePipeline);
-  evaluatePass.setBindGroup(0, gpu.evaluateGroup);
-  evaluatePass.dispatchWorkgroups(Math.ceil(SIZE / 8), Math.ceil(SIZE / 8), candidateCount);
-  evaluatePass.end();
-  encoder.copyBufferToBuffer(gpu.scoreBuffer, 0, readbackBuffer, 0, candidateCount * 4);
-  if (includePreview) {
-    encoder.copyTextureToBuffer(
-      { texture: gpu.candidateAtlas },
-      { buffer: gpu.imageReadback, bytesPerRow: IMAGE_BYTES_PER_ROW, rowsPerImage: SIZE },
-      [SIZE, SIZE]
-    );
+    const evaluatePass = encoder.beginComputePass({ label: "score simplification candidates" });
+    evaluatePass.setPipeline(gpu.evaluatePipeline);
+    evaluatePass.setBindGroup(0, gpu.evaluateGroup);
+    evaluatePass.dispatchWorkgroups(Math.ceil(SIZE / 8), Math.ceil(SIZE / 8), batchCount);
+    evaluatePass.end();
+    encoder.copyBufferToBuffer(gpu.scoreBuffer, batchStart * 4, readbackBuffer, batchStart * 4, batchCount * 4);
+    if (includePreview) {
+      encoder.copyTextureToBuffer(
+        { texture: gpu.candidateAtlas },
+        { buffer: gpu.imageReadback, bytesPerRow: IMAGE_BYTES_PER_ROW, rowsPerImage: SIZE },
+        [SIZE, SIZE]
+      );
+    }
+    device.queue.submit([encoder.finish()]);
   }
-  device.queue.submit([encoder.finish()]);
 }
 
 async function mapDecimationImage() {
@@ -720,11 +789,12 @@ async function simplifyGenome() {
     }
 
     document.querySelector("#decimateSummary").textContent = `Scoring ${originalCount} leave-one-shape-out variants…`;
-    device.queue.writeBuffer(gpu.candidateBuffer, 0, variants);
     submitDecimationEvaluation(
       originalCount,
       originalCount - 1,
-      gpu.decimationScoreReadback
+      gpu.decimationScoreReadback,
+      false,
+      variants
     );
     await gpu.decimationScoreReadback.mapAsync(GPUMapMode.READ);
     const scores = new Uint32Array(gpu.decimationScoreReadback.getMappedRange(0, originalCount * 4).slice(0));
@@ -755,7 +825,7 @@ async function simplifyGenome() {
     const image = await mapDecimationImage();
     gpu.scoreReadback.unmap();
     gpu.imageReadback.unmap();
-    const simplifiedError = simplifiedScore / (SIZE * SIZE * 4 * 10000);
+    const simplifiedError = simplifiedScore / SCORE_NORMALIZER;
 
     decimationPreview = {
       genome: simplified,
@@ -765,7 +835,6 @@ async function simplifyGenome() {
       originalError
     };
     resultContext.putImageData(new ImageData(image, SIZE, SIZE), 0, 0);
-    document.querySelector("#resultEmpty").hidden = true;
     document.querySelector("#fitnessValue").textContent = simplifiedError.toFixed(4);
     document.querySelector("#fitnessNote").textContent = "Simplification preview; lower is better";
     document.querySelector("#improvementStat").textContent = "—";
@@ -973,11 +1042,15 @@ function stopCamera() {
     cameraStream = null;
   }
   const video = document.querySelector("#cameraVideo");
-  video.pause();
-  video.srcObject = null;
-  video.classList.remove("active");
-  document.querySelector("#captureButton").classList.remove("active");
-  document.querySelector("#cameraButton").textContent = "◎  Use camera";
+  if (video) {
+    video.pause();
+    video.srcObject = null;
+    video.classList.remove("active");
+  }
+  const captureButton = document.querySelector("#captureButton");
+  if (captureButton) captureButton.classList.remove("active");
+  const cameraButton = document.querySelector("#cameraButton");
+  if (cameraButton) cameraButton.textContent = "◎  Use camera";
 }
 
 async function toggleCamera() {
@@ -992,11 +1065,14 @@ async function toggleCamera() {
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
     const video = document.querySelector("#cameraVideo");
+    if (!video) return;
     video.srcObject = cameraStream;
     await video.play();
     video.classList.add("active");
-    document.querySelector("#captureButton").classList.add("active");
-    document.querySelector("#cameraButton").textContent = "×  Stop camera";
+    const captureButton = document.querySelector("#captureButton");
+    if (captureButton) captureButton.classList.add("active");
+    const cameraButton = document.querySelector("#cameraButton");
+    if (cameraButton) cameraButton.textContent = "×  Stop camera";
     setNotice("Camera is ready. Capture a frame to use it as the target.");
   } catch (error) {
     setNotice(`Could not access the camera: ${error.message}`, true);
@@ -1008,27 +1084,35 @@ imageInput.addEventListener("change", (event) => loadTargetImage(event.target.fi
   context: targetContext,
   size: SIZE,
   setImageName: (name) => { selectedImageName = name; },
+  setImageSource: setTargetBitmap,
   stopCamera,
   targetReady,
   setNotice,
   reportError
 }));
 document.querySelector("#sampleButton").addEventListener("click", makeSample);
+resolutionSelect.addEventListener("change", () => changeWorkingResolution().catch(reportError));
 document.querySelector("#toonUploadButton").addEventListener("click", () => toonFileInput.click());
 toonFileInput.addEventListener("change", (event) => loadToonFile(event.target.files[0]));
 document.querySelector("#toonImportButton").addEventListener("click", () => importToonGenome(toonText.value));
-document.querySelector("#cameraButton").addEventListener("click", toggleCamera);
-document.querySelector("#captureButton").addEventListener("click", async () => {
-  const video = document.querySelector("#cameraVideo");
-  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-    setNotice("Wait for the camera preview to become available, then capture again.", true);
-    return;
-  }
-  drawSourceCover(video, targetContext, SIZE);
-  selectedImageName = "camera-capture";
-  stopCamera();
-  await targetReady().catch(reportError);
-});
+const cameraButton = document.querySelector("#cameraButton");
+const captureButton = document.querySelector("#captureButton");
+if (cameraButton) {
+  cameraButton.addEventListener("click", toggleCamera);
+}
+if (captureButton) {
+  captureButton.addEventListener("click", async () => {
+    const video = document.querySelector("#cameraVideo");
+    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      setNotice("Wait for the camera preview to become available, then capture again.", true);
+      return;
+    }
+    drawSourceCover(video, targetContext, SIZE);
+    selectedImageName = "camera-capture";
+    stopCamera();
+    await targetReady().catch(reportError);
+  });
+}
 selectionOverlay.addEventListener("pointerdown", (event) => {
   if (!targetLoaded || decimationBusy || decimationPreview || event.button !== 0) return;
   event.preventDefault();
@@ -1081,6 +1165,7 @@ document.querySelector("#saveImageButton").addEventListener("click", () => {
   }, "image/png");
 });
 document.querySelector("#saveDnaButton").addEventListener("click", saveDna);
+window.addEventListener("pagehide", () => targetBitmap?.close(), { once: true });
 
 updateControlLabels();
 if (navigator.gpu) {
