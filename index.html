@@ -65,6 +65,19 @@
             <div><div class="stat-label">Candidates / sec</div><div id="rateStat" class="stat-value">—</div><div id="rateDetail" class="stat-detail">—</div></div>
           </div>
         </div>
+        <div class="action-block">
+          <div class="section-label">06 / Evolve</div>
+          <button id="autoModeButton" class="button primary wide auto-mode-button" type="button" disabled>Auto mode</button>
+          <div id="autoModeStatus" class="setting-help auto-mode-status" aria-live="polite">Auto mode slows between stages and saves brief focus passes for detailed areas.</div>
+          <div class="run-actions">
+            <button id="runButton" class="button primary" type="button" disabled>▶ &nbsp; Start evolution</button>
+            <button id="resetButton" class="button icon-button" type="button" title="Reset evolution" aria-label="Reset evolution" disabled>↺</button>
+          </div>
+          <div class="export-actions">
+            <button id="saveImageButton" class="button ghost" type="button" disabled>↓ &nbsp; Image</button>
+            <button id="saveDnaButton" class="button ghost" type="button" disabled>↓ &nbsp; TOON</button>
+          </div>
+        </div>
       </div>
 
       <aside class="control-panel">
@@ -136,18 +149,6 @@
           </div>
         </div>
 
-        <div class="action-block">
-          <div class="section-label">06 / Evolve</div>
-          <div class="run-actions">
-            <button id="runButton" class="button primary" type="button" disabled>▶ &nbsp; Start evolution</button>
-            <button id="resetButton" class="button icon-button" type="button" title="Reset evolution" aria-label="Reset evolution" disabled>↺</button>
-          </div>
-          <div class="export-actions">
-            <button id="saveImageButton" class="button ghost" type="button" disabled>↓ &nbsp; Image</button>
-            <button id="saveDnaButton" class="button ghost" type="button" disabled>↓ &nbsp; TOON</button>
-          </div>
-        </div>
-
         <div id="notice" class="notice" role="status">WebGPU is required. Use a recent Chrome or Edge on HTTPS or localhost.</div>
       </aside>
 
@@ -160,7 +161,7 @@
             <div class="setting-head"><label for="focusRange">Guided mutations in selection</label><span id="focusValue" class="setting-value">70%</span></div>
             <input id="focusRange" type="range" min="0" max="100" step="5" value="70" disabled>
             <div class="range-hints"><span>0% / mostly global</span><span>100% / focused</span></div>
-            <div class="setting-help">Focused proposals mix error hotspots with random target-image samples, using sampled color and varied polygon shapes to add detail. Fitness scores the whole image.</div>
+            <div class="setting-help">Focused proposals mix error hotspots with random target-image samples, using sampled color and varied polygon shapes to add detail. Manual focus expires after 1,500 generations. Auto mode waits until fine refinement, then briefly focuses on a detailed, high-error area every 3,000 generations; fitness always scores the whole image.</div>
           </div>
         </div>
 

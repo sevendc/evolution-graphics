@@ -25,12 +25,13 @@ Open [http://localhost:8080](http://localhost:8080). The server binds to `127.0.
 ## Use
 
 1. Choose **Upload image** or **Try sample** to set the target, then select a working image size from 160 × 160 to 1,024 × 1,024. Larger sizes preserve more detail but need more GPU time; changing the size restarts evolution.
-2. Set the starting shape count, mutation strength, shape/point change chance, maximum points per shape, and candidates per generation.
-3. Select **Start evolution**. Pause or resume with the same button; use the reset button to restart with the current settings.
-4. Drag a rectangle on the target image to focus some guided mutations on that area. Adjust **Guided mutations in selection** to control how often guided mutations target it; focused proposals mix high-error samples with random samples from the target image, using sampled colors and varied polygon shapes to add detail. Clear the selection to return to global guidance. Fitness still scores the full image.
-5. Compare the best candidate with the target. A lower multi-scale error means a closer match. Live statistics are shown below the image comparison.
-6. Once a result is available, choose a removal percentage and analyze simplification. The app scores leave-one-shape-out variants, previews removing the least-impactful shapes, and shows the fitness change. Keep the preview to continue from the smaller genome, or discard it to restore the previous result.
-7. Save the evolved image as PNG or export its genome as TOON. Import a TOON file or paste its text to seed a run.
+2. Select **Auto mode** for a hands-off coarse-to-fine run, or set the starting shape count, mutation strength, shape/point change chance, maximum points per shape, and candidates per generation manually.
+3. Auto mode begins with one shape for a new target (or continues from an existing best/imported genome), gradually lowers mutation over 4,000 generations, and increases shape complexity every 1,000 generations. It runs continuously between previews, updating its settings every 100 generations. Starting at generation 4,000, it may focus guided mutations on a small, detailed, high-error area for 25 generations every 3,000 generations; otherwise it searches globally. At the 512-shape limit it automatically analyzes and keeps a 10% simplification when successful. Select **Stop auto mode** to preserve the current best and restore manual controls.
+4. For manual evolution, select **Start evolution**. Pause or resume with the same button; use the reset button to restart with the current settings.
+5. To guide manual evolution, drag a rectangle on the target image. Adjust **Guided mutations in selection** to control how often guided mutations target it; focused proposals mix high-error samples with random samples from the target image, using sampled colors and varied polygon shapes to add detail. Manual focus expires after 1,500 completed generations; clear it earlier to return to global guidance. Fitness always scores the full image.
+6. Compare the best candidate with the target. A lower multi-scale error means a closer match. Live statistics are shown below the image comparison.
+7. Once a result is available, choose a removal percentage and analyze simplification. The app scores leave-one-shape-out variants, previews removing the least-impactful shapes, and shows the fitness change. Keep the preview to continue from the smaller genome, or discard it to restore the previous result.
+8. Save the evolved image as PNG or export its genome as TOON. Import a TOON file or paste its text to seed a run.
 
 The genome supports up to 512 shapes and 16 points per shape; the complexity slider controls the mutation limit, from triangles (3 points) through 16-point polygons. Mutation strength ranges from 0.001 to 0.7. The population setting ranges up to 2,048 candidates per generation. Larger values can use substantially more GPU time; reduce the population if the page becomes sluggish. Changing the starting shape count resets evolution, while population, structural mutation, and complexity settings can be adjusted during a run.
 
@@ -46,7 +47,7 @@ TOON version 1 triangle genomes remain supported and are still exported when eve
 - [`js/gpu/shaders.js`](./js/gpu/shaders.js) — WGSL shader source used by WebGPU.
 - [`server.js`](./server.js) — Minimal static-file server used by `npm start`.
 - [`package.json`](./package.json) — Project metadata and start script.
-- [`plan.md`](./plan.md), [`plan2.md`](./plan2.md), and [`plan3.md`](./plan3.md) — Implementation notes and follow-up ideas.
+- [`plan.md`](./plan.md), [`plan2.md`](./plan2.md), [`plan3.md`](./plan3.md), and [`plan4.md`](./plan4.md) — Implementation notes and follow-up ideas.
 - [`whatsapp-image-2024-09-12-at-17-15-37_4652b8f4-genome.toon`](./whatsapp-image-2024-09-12-at-17-15-37_4652b8f4-genome.toon) — Example TOON genome.
 
 JavaScript imports and stylesheet links use relative paths so the app also works when deployed under a GitHub Pages repository path. The application processes images locally in the browser; it does not upload them to a server. There is currently no automated test script in `package.json`.

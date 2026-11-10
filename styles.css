@@ -95,6 +95,9 @@
     input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border: 2px solid #20241b; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
     .range-hints { display: flex; justify-content: space-between; color: #737a6f; font-size: 9px; }
     .run-actions { display: grid; grid-template-columns: 1fr 42px; gap: 8px; margin-top: 19px; }
+    .auto-mode-button { margin-top: 16px; }
+    .auto-mode-status { min-height: 28px; }
+    .visual-panel > .action-block { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
     .icon-button { padding: 0; font-size: 15px; }
     .export-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
     .stats-block { margin-top: 21px; padding-top: 16px; border-top: 1px solid var(--line); }
@@ -127,7 +130,6 @@
       .control-panel { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
       .control-panel > .source-block, .control-panel > .divider, .control-panel > .notice { grid-column: 1 / -1; }
       .control-panel > .settings-block { grid-column: 1; }
-      .control-panel > .action-block { grid-column: 2; grid-row: 3; align-self: end; }
       .focus-block, .simplify-block { grid-column: 1 / -1; }
       .divider { margin: 15px 0; }
       footer { font-size: 9px; }
@@ -139,7 +141,6 @@
       .fitness { padding: 12px; }
       .fitness-value { font-size: 17px; }
       .control-panel { display: block; }
-      .control-panel > .action-block { margin-top: 18px; }
       .stats { grid-template-columns: 1fr 1fr; }
     }
   

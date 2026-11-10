@@ -5,6 +5,15 @@ import { drawSourceCover, loadImageFile as loadTargetImage, makeSampleArtwork } 
 let SIZE = 160;
 let IMAGE_BYTES_PER_ROW = Math.ceil(SIZE * 4 / 256) * 256;
 const REPORT_EVERY = 5;
+const FOCUS_DURATION_GENERATIONS = 1500;
+const AUTO_FOCUS_FIRST_GENERATION = 4000;
+const AUTO_FOCUS_INTERVAL = 3000;
+const AUTO_FOCUS_DURATION = 25;
+const AUTO_VARIABLE_UPDATE_INTERVAL = 100;
+const AUTO_COMPLEXITY_STAGE_GENERATIONS = 1000;
+const AUTO_MUTATION_RAMP_GENERATIONS = 4000;
+const AUTO_POPULATION_LIMIT = 512;
+const AUTO_POPULATION_STEP = 32;
 const MAX_POPULATION = 2048;
 const MAX_SHAPES = 512;
 const MAX_VERTICES = 16;
@@ -35,6 +44,8 @@ const selectionOverlay = document.querySelector("#selectionOverlay");
 const selectionBox = document.querySelector("#selectionBox");
 const toonText = document.querySelector("#toonText");
 const toonFileInput = document.querySelector("#toonFileInput");
+const autoModeButton = document.querySelector("#autoModeButton");
+const autoModeStatus = document.querySelector("#autoModeStatus");
 
 
 
@@ -64,6 +75,21 @@ let seed = Math.floor(Math.random() * 0xffffffff);
 let selectedImageName = "sample";
 let pendingGenome = null;
 let focusRegion = null;
+let focusGenerationsRemaining = 0;
+let autoMode = false;
+let autoGenerations = 0;
+let autoFocusNextGeneration = AUTO_FOCUS_FIRST_GENERATION;
+let autoSimplifyNextGeneration = 0;
+let autoSimplificationPending = false;
+let autoSimplificationInProgress = false;
+let autoSettingsSnapshot = null;
+let autoFocusSnapshot = null;
+let autoPopulationBest = null;
+let autoPopulationTrial = null;
+let autoPopulationNextTrial = 200;
+let autoFrameHandle = null;
+let autoFrameLastTime = 0;
+let autoFrameSamples = [];
 let selectionStart = null;
 let selectionPointerId = null;
 let draftFocusRegion = null;
@@ -98,10 +124,11 @@ function updateControlLabels() {
 }
 
 function syncDecimationControls() {
-  const locked = decimationBusy || decimationPreview !== null || resolutionChanging;
+  const operationLocked = decimationBusy || decimationPreview !== null || resolutionChanging;
+  const locked = operationLocked || autoMode;
   const unavailable = !gpu?.ready || !Number.isFinite(bestError);
   selectionOverlay.setAttribute("aria-disabled", String(!targetLoaded || locked));
-  for (const id of ["uploadButton", "sampleButton", "toonUploadButton", "toonImportButton", "imageInput", "toonFileInput", "toonText"]) {
+  for (const id of ["uploadButton", "sampleButton", "toonUploadButton", "toonImportButton", "imageInput", "toonFileInput", "toonText", "cameraButton", "captureButton"]) {
     const control = document.querySelector(`#${id}`);
     if (control) control.disabled = locked;
   }
@@ -119,15 +146,21 @@ function syncDecimationControls() {
   document.querySelector("#discardDecimationButton").disabled = !decimationPreview || decimationBusy;
   document.querySelector("#saveImageButton").disabled = locked || unavailable;
   document.querySelector("#saveDnaButton").disabled = locked || unavailable;
+  autoModeButton.disabled = autoMode ? false : operationLocked || !gpu?.ready || !targetLoaded;
+  autoModeButton.textContent = autoMode ? "Stop auto mode" : "Auto mode";
   syncFocusControls(locked);
 }
 
-function syncFocusControls(locked = decimationBusy || decimationPreview !== null) {
+function syncFocusControls(locked = decimationBusy || decimationPreview !== null || autoMode) {
   document.querySelector("#clearFocusButton").disabled = !focusRegion || locked;
   focusRange.disabled = !focusRegion || locked;
   document.querySelector("#focusHelp").textContent = focusRegion
-    ? "Focus area selected. Drag on the target to replace it, or clear it to return to global guidance."
-    : "Drag a rectangle on the target image to guide mutations toward that area.";
+    ? autoMode
+      ? `Auto focus active (${focusGenerationsRemaining} generations remaining); it will return to global guidance automatically.`
+      : `Focus area active (${focusGenerationsRemaining} generations remaining). Drag on the target to replace it, or clear it to return to global guidance.`
+    : autoMode
+      ? `Auto mode starts brief focus passes at generation ${AUTO_FOCUS_FIRST_GENERATION}, then every ${AUTO_FOCUS_INTERVAL.toLocaleString()} generations, prioritizing detailed regions.`
+      : `Drag a rectangle on the target image to guide mutations toward that area. Focus expires after ${FOCUS_DURATION_GENERATIONS} generations.`;
   const region = draftFocusRegion || focusRegion;
   selectionBox.style.display = region ? "block" : "none";
   if (region) {
@@ -154,7 +187,8 @@ function finishFocusSelection(event, keepSelection) {
     const region = draftFocusRegion;
     if (region.x1 - region.x0 >= 1 / SIZE && region.y1 - region.y0 >= 1 / SIZE) {
       focusRegion = region;
-      setNotice("Focus area selected. Guided proposals mix high-error hotspots and random target-image samples there.");
+      focusGenerationsRemaining = FOCUS_DURATION_GENERATIONS;
+      setNotice(`Focus area selected. Guided proposals will use it for up to ${FOCUS_DURATION_GENERATIONS} generations.`);
     }
   }
   selectionStart = null;
@@ -183,11 +217,197 @@ function writeFocusParams(view) {
   view.setFloat32(60, region.y1, true);
 }
 
+function activateAutoFocus(errorMap) {
+  const cells = 8;
+  const windowSize = 1;
+  const cellErrors = new Float64Array(cells * cells);
+  const cellComplexity = new Float64Array(cells * cells);
+  const targetPixels = targetContext.getImageData(0, 0, SIZE, SIZE).data;
+  const luminance = (offset) => (
+    targetPixels[offset] * 0.2126 +
+    targetPixels[offset + 1] * 0.7152 +
+    targetPixels[offset + 2] * 0.0722
+  ) / 255;
+  for (let cellY = 0; cellY < cells; cellY += 1) {
+    const y0 = Math.floor(cellY * SIZE / cells);
+    const y1 = Math.floor((cellY + 1) * SIZE / cells);
+    for (let cellX = 0; cellX < cells; cellX += 1) {
+      const x0 = Math.floor(cellX * SIZE / cells);
+      const x1 = Math.floor((cellX + 1) * SIZE / cells);
+      let total = 0;
+      let detail = 0;
+      for (let y = y0; y < y1; y += 1) {
+        for (let x = x0; x < x1; x += 1) {
+          const pixelIndex = y * SIZE + x;
+          total += errorMap[pixelIndex];
+          const current = luminance(pixelIndex * 4);
+          if (x + 1 < SIZE) detail += Math.abs(current - luminance((pixelIndex + 1) * 4));
+          if (y + 1 < SIZE) detail += Math.abs(current - luminance((pixelIndex + SIZE) * 4));
+        }
+      }
+      const cellIndex = cellY * cells + cellX;
+      const cellArea = (x1 - x0) * (y1 - y0);
+      cellErrors[cellIndex] = total / cellArea;
+      cellComplexity[cellIndex] = detail / (cellArea * 2);
+    }
+  }
+
+  let bestX = 0;
+  let bestY = 0;
+  let bestError = -Infinity;
+  let bestComplexity = 0;
+  for (let cellY = 0; cellY <= cells - windowSize; cellY += 1) {
+    for (let cellX = 0; cellX <= cells - windowSize; cellX += 1) {
+      let total = 0;
+      let complexity = 0;
+      for (let y = 0; y < windowSize; y += 1) {
+        for (let x = 0; x < windowSize; x += 1) {
+          const cellIndex = (cellY + y) * cells + cellX + x;
+          total += cellErrors[cellIndex];
+          complexity += cellComplexity[cellIndex];
+        }
+      }
+      complexity /= windowSize * windowSize;
+      const weightedError = total * (0.1 + complexity * 4);
+      if (weightedError > bestError) {
+        bestError = weightedError;
+        bestComplexity = complexity;
+        bestX = cellX;
+        bestY = cellY;
+      }
+    }
+  }
+
+  autoFocusNextGeneration += AUTO_FOCUS_INTERVAL;
+  if (bestComplexity < 0.02) return;
+  focusRegion = {
+    x0: bestX / cells,
+    y0: bestY / cells,
+    x1: (bestX + windowSize) / cells,
+    y1: (bestY + windowSize) / cells
+  };
+  focusGenerationsRemaining = AUTO_FOCUS_DURATION;
+  syncDecimationControls();
+  setNotice(`Auto focus is guiding mutations toward a detailed, high-error image region for ${AUTO_FOCUS_DURATION} generations.`);
+}
+
+function sampleAutoFrame(time) {
+  if (!autoMode) {
+    autoFrameHandle = null;
+    return;
+  }
+  if (document.visibilityState === "visible" && autoFrameLastTime > 0) {
+    const interval = time - autoFrameLastTime;
+    if (interval > 0 && interval < 1000) {
+      autoFrameSamples.push({ time, interval });
+      if (autoFrameSamples.length > 120) autoFrameSamples.shift();
+    }
+  }
+  autoFrameLastTime = time;
+  autoFrameHandle = requestAnimationFrame(sampleAutoFrame);
+}
+
+function medianFrameInterval(afterTime = 0) {
+  const intervals = autoFrameSamples
+    .filter((sample) => sample.time >= afterTime)
+    .map((sample) => sample.interval)
+    .sort((a, b) => a - b);
+  if (intervals.length < 15) return null;
+  return intervals[Math.floor(intervals.length / 2)];
+}
+
+function tuneAutoPopulation() {
+  if (!autoMode || autoGenerations < autoPopulationNextTrial) return;
+  const recentRates = candidateRates.slice(-5);
+  if (recentRates.length < 3) {
+    autoPopulationNextTrial = autoGenerations + REPORT_EVERY * 5;
+    return;
+  }
+  const measuredRate = recentRates.reduce((sum, rate) => sum + rate, 0) / recentRates.length;
+
+  if (autoPopulationTrial) {
+    const frameInterval = medianFrameInterval(autoPopulationTrial.startedAt);
+    const responsive = frameInterval !== null
+      && frameInterval <= Math.max(50, autoPopulationTrial.baselineFrameInterval * 1.25);
+    if (responsive && measuredRate >= autoPopulationTrial.baselineRate * 1.05) {
+      autoPopulationBest = {
+        population: autoPopulationTrial.population,
+        rate: measuredRate
+      };
+    } else {
+      gpu.population = autoPopulationBest.population;
+      populationRange.value = String(gpu.population);
+      autoPopulationTrial = null;
+      autoPopulationNextTrial = Infinity;
+      updateControlLabels();
+      return;
+    }
+    autoPopulationTrial = null;
+  } else if (!autoPopulationBest) {
+    autoPopulationBest = { population: gpu.population, rate: measuredRate };
+  }
+
+  if (autoPopulationBest.population >= AUTO_POPULATION_LIMIT) {
+    autoPopulationNextTrial = Infinity;
+    return;
+  }
+
+  const baselineFrameInterval = medianFrameInterval();
+  if (baselineFrameInterval === null || baselineFrameInterval > 50 || document.visibilityState !== "visible") {
+    autoPopulationNextTrial = document.visibilityState === "visible"
+      ? autoGenerations + 200
+      : Infinity;
+    return;
+  }
+  const trialPopulation = Math.min(AUTO_POPULATION_LIMIT, autoPopulationBest.population + AUTO_POPULATION_STEP);
+  autoPopulationTrial = {
+    population: trialPopulation,
+    baselineRate: autoPopulationBest.rate,
+    baselineFrameInterval,
+    startedAt: performance.now()
+  };
+  gpu.population = trialPopulation;
+  populationRange.value = String(trialPopulation);
+  autoPopulationNextTrial = autoGenerations + 200;
+  updateControlLabels();
+}
+
+function updateAutoModeSchedule() {
+  if (!autoMode || !gpu?.ready) return;
+  const scheduleGeneration = Math.floor(autoGenerations / AUTO_VARIABLE_UPDATE_INTERVAL) * AUTO_VARIABLE_UPDATE_INTERVAL;
+  const progress = Math.min(1, scheduleGeneration / AUTO_MUTATION_RAMP_GENERATIONS);
+  const mutation = 0.65 - (0.65 - 0.08) * progress;
+  const complexitySteps = [6, 8, 10, 13, 16];
+  const phase = Math.min(
+    complexitySteps.length - 1,
+    Math.floor(scheduleGeneration / AUTO_COMPLEXITY_STAGE_GENERATIONS)
+  );
+  mutationRange.value = mutation.toFixed(3);
+  complexityRange.value = String(complexitySteps[phase]);
+  updateControlLabels();
+  tuneAutoPopulation();
+
+  const phaseName = scheduleGeneration < AUTO_COMPLEXITY_STAGE_GENERATIONS
+    ? "coarse search"
+    : scheduleGeneration < AUTO_MUTATION_RAMP_GENERATIONS
+      ? "detail refinement"
+      : "fine refinement";
+  const focusStatus = focusRegion ? `Focus active: ${focusGenerationsRemaining} generations` : "Global search";
+  const populationStatus = autoPopulationTrial
+    ? `testing ${autoPopulationTrial.population} candidates/generation`
+    : `${gpu.population} candidates/generation`;
+  autoModeStatus.textContent =
+    `Auto mode: ${phaseName} | generation ${autoGenerations.toLocaleString()} | ` +
+    `${gpu.count} shapes | mutation ${Number(mutationRange.value).toFixed(3)} | ` +
+    `${complexityRange.value} points | ${populationStatus} | ${focusStatus}`;
+}
+
 function updateGenomeSize(count) {
   document.querySelector("#genomeStat").textContent = `${(count * SHAPE_BYTES / 1024).toFixed(2)} KB DNA`;
 }
 
 function makeSample() {
+  if (autoMode) return;
   targetBitmap?.close();
   targetBitmap = null;
   sampleTarget = true;
@@ -217,6 +437,10 @@ function getCandidateAtlasLayout() {
 }
 
 async function changeWorkingResolution() {
+  if (autoMode) {
+    setNotice("Stop Auto mode before changing the working image size.", true);
+    return;
+  }
   if (!Array.from(resolutionSelect.options).some((option) => option.value === resolutionSelect.value)) {
     resolutionSelect.value = String(SIZE);
     setNotice("Choose one of the listed working image sizes.", true);
@@ -274,15 +498,18 @@ function disposeGpu() {
   gpu.imageReadback.destroy();
   gpu.dnaReadback.destroy();
   gpu.decimationScoreReadback.destroy();
+  gpu.autoFocusReadback.destroy();
   gpu = null;
 }
 
 async function targetReady() {
+  if (autoMode) endAutoMode("Auto mode stopped because the target image changed.");
   setRunning(false);
   decimationPreview = null;
   decimationBusy = false;
   resumeAfterDecimation = false;
   focusRegion = null;
+  focusGenerationsRemaining = 0;
   draftFocusRegion = null;
   selectionStart = null;
   selectionPointerId = null;
@@ -362,8 +589,10 @@ async function initializeGpu() {
   }
   device = await adapter.requestDevice();
   device.lost.then((info) => {
+    if (autoMode) endAutoMode("Auto mode stopped because the GPU device was lost.");
     gpu = null;
     running = false;
+    syncDecimationControls();
     setGpuState("error", "GPU device lost");
     setNotice(`The GPU device was lost${info.message ? `: ${info.message}` : "."}`, true);
   });
@@ -409,13 +638,14 @@ async function initializeEvolution() {
   const bestScoreBuffer = createBuffer(4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
   const candidateCountsBuffer = createBuffer(MAX_POPULATION * 4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
   const bestCountBuffer = createBuffer(4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
-  const errorMapBuffer = createBuffer(SIZE * SIZE * 4, GPUBufferUsage.STORAGE);
+  const errorMapBuffer = createBuffer(SIZE * SIZE * 4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
   const paramsBuffer = createBuffer(64, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
   const scoreReadback = createBuffer(4, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
   const countReadback = createBuffer(4, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
   const imageReadback = createBuffer(IMAGE_BYTES_PER_ROW * SIZE, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
   const dnaReadback = createBuffer(maxGenomeBytes, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
   const decimationScoreReadback = createBuffer(MAX_POPULATION * 4, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+  const autoFocusReadback = createBuffer(SIZE * SIZE * 4, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
 
   const mutatePipeline = createPipeline(mutationShader, "mutate genome");
   const evaluatePipeline = createPipeline(evaluationShader, "render and score candidate");
@@ -483,7 +713,7 @@ async function initializeEvolution() {
   gpu = {
     ready: true, count, population, ...atlasLayout, genomeBytes: maxGenomeBytes, candidateBytes, targetTexture, outputTexture, candidateAtlas,
     candidateBuffer, bestBuffer, scoreBuffer, bestScoreBuffer, candidateCountsBuffer, bestCountBuffer, errorMapBuffer, paramsBuffer,
-    scoreReadback, countReadback, imageReadback, dnaReadback, decimationScoreReadback,
+    scoreReadback, countReadback, imageReadback, dnaReadback, decimationScoreReadback, autoFocusReadback,
     mutatePipeline, evaluatePipeline, finalizePipeline, guidePipeline, rasterPipeline,
     mutateGroup, evaluateGroup, finalizeGroup, guideGroup, rasterGroup, bestRenderGroup,
     hasGuidance: false,
@@ -494,6 +724,7 @@ async function initializeEvolution() {
   device.queue.writeBuffer(bestScoreBuffer, 0, new Uint32Array([0xffffffff]));
   device.queue.writeBuffer(scoreBuffer, 0, new Uint32Array([0]));
   generation = 0;
+  focusGenerationsRemaining = focusRegion ? FOCUS_DURATION_GENERATIONS : 0;
   bestError = Infinity;
   initialError = Infinity;
   generationTimes = [];
@@ -594,9 +825,20 @@ async function submitGeneration() {
   }
   generation += 1;
   candidateEvaluations += gpu.population;
+  if (autoMode) autoGenerations += 1;
+  if (focusRegion) {
+    focusGenerationsRemaining -= 1;
+    if (focusGenerationsRemaining <= 0) {
+      focusRegion = null;
+      focusGenerationsRemaining = 0;
+      syncDecimationControls();
+      setNotice("Focus guidance ended. Evolution continues with global guidance.");
+    }
+  }
 }
 
 async function updatePreview() {
+  const captureAutoFocusMap = autoMode && autoGenerations >= autoFocusNextGeneration;
   device.queue.writeBuffer(gpu.candidateCountsBuffer, 0, new Uint32Array([gpu.count]));
   writeEvaluationParams(gpu.count, 1);
   const encoder = device.createCommandEncoder({ label: "preview best candidate" });
@@ -627,13 +869,18 @@ async function updatePreview() {
     { buffer: gpu.imageReadback, bytesPerRow: IMAGE_BYTES_PER_ROW, rowsPerImage: SIZE },
     [SIZE, SIZE]
   );
+  if (captureAutoFocusMap) {
+    encoder.copyBufferToBuffer(gpu.errorMapBuffer, 0, gpu.autoFocusReadback, 0, SIZE * SIZE * Float32Array.BYTES_PER_ELEMENT);
+  }
   device.queue.submit([encoder.finish()]);
   gpu.hasGuidance = true;
-  await Promise.all([
+  const readbacks = [
     gpu.scoreReadback.mapAsync(GPUMapMode.READ),
     gpu.countReadback.mapAsync(GPUMapMode.READ),
     gpu.imageReadback.mapAsync(GPUMapMode.READ)
-  ]);
+  ];
+  if (captureAutoFocusMap) readbacks.push(gpu.autoFocusReadback.mapAsync(GPUMapMode.READ));
+  await Promise.all(readbacks);
   const score = new Uint32Array(gpu.scoreReadback.getMappedRange())[0];
   const count = new Uint32Array(gpu.countReadback.getMappedRange())[0];
   const paddedImage = new Uint8Array(gpu.imageReadback.getMappedRange().slice(0));
@@ -644,6 +891,10 @@ async function updatePreview() {
   gpu.scoreReadback.unmap();
   gpu.countReadback.unmap();
   gpu.imageReadback.unmap();
+  const errorMap = captureAutoFocusMap
+    ? new Float32Array(gpu.autoFocusReadback.getMappedRange().slice(0))
+    : null;
+  if (captureAutoFocusMap) gpu.autoFocusReadback.unmap();
   gpu.count = count;
   const mse = score / SCORE_NORMALIZER;
   if (Number.isFinite(mse)) {
@@ -679,6 +930,8 @@ async function updatePreview() {
   lastReportTime = now;
   lastReportGeneration = generation;
   lastReportCandidateEvaluations = candidateEvaluations;
+  if (errorMap && autoMode) activateAutoFocus(errorMap);
+  if (autoMode) updateAutoModeSchedule();
   syncDecimationControls();
 }
 
@@ -871,7 +1124,7 @@ function resumeEvolutionAfterDecimation() {
 }
 
 function keepSimplification() {
-  if (!decimationPreview || decimationBusy || !gpu?.ready) return;
+  if (!decimationPreview || decimationBusy || !gpu?.ready) return false;
   const preview = decimationPreview;
   try {
     device.queue.writeBuffer(gpu.bestBuffer, 0, preview.genome);
@@ -880,7 +1133,7 @@ function keepSimplification() {
   } catch (error) {
     console.error(error);
     setNotice(`Could not keep the simplified genome: ${error instanceof Error ? error.message : String(error)}`, true);
-    return;
+    return false;
   }
   gpu.count = preview.count;
   gpu.importedGenome = true;
@@ -911,6 +1164,7 @@ function keepSimplification() {
   syncDecimationControls();
   setNotice("Simplified genome kept. Evolution will continue from it when started.");
   resumeEvolutionAfterDecimation();
+  return true;
 }
 
 async function discardSimplification() {
@@ -948,26 +1202,171 @@ async function evolve() {
       }
       if (!running) break;
       await updatePreview();
+      if (autoMode && gpu.count >= MAX_SHAPES && autoGenerations >= autoSimplifyNextGeneration) {
+        running = false;
+        runButton.innerHTML = "▶ &nbsp; Start evolution";
+        autoSimplificationPending = true;
+        break;
+      }
     }
     if (gpu?.ready && generation !== lastReportGeneration) await updatePreview();
   } catch (error) {
     running = false;
     runButton.innerHTML = "▶ &nbsp; Start evolution";
+    if (autoMode) endAutoMode("Auto mode stopped because evolution encountered an error.");
     reportError(error);
   } finally {
     busy = false;
+    if (autoSimplificationPending) {
+      autoSimplificationPending = false;
+      if (autoMode) simplifyAutomatically().catch((error) => {
+        endAutoMode("Auto mode stopped because automatic simplification failed.");
+        reportError(error);
+      });
+    }
   }
 }
 
 function setRunning(value) {
   if (decimationBusy || decimationPreview) return;
+  if (autoMode && !value) {
+    running = false;
+    runButton.innerHTML = "▶ &nbsp; Start evolution";
+    syncDecimationControls();
+    return;
+  }
   running = value;
   runButton.innerHTML = value ? "Ⅱ &nbsp; Pause evolution" : "▶ &nbsp; Start evolution";
   syncDecimationControls();
   if (value) evolve();
 }
 
-async function resetEvolution() {
+function restoreAutoSettings() {
+  if (!autoSettingsSnapshot) return;
+  mutationRange.value = autoSettingsSnapshot.mutation;
+  structureRange.value = autoSettingsSnapshot.structure;
+  complexityRange.value = autoSettingsSnapshot.complexity;
+  decimateRange.value = autoSettingsSnapshot.decimate;
+  focusRange.value = autoSettingsSnapshot.focus;
+  populationRange.value = autoSettingsSnapshot.population;
+  if (gpu?.ready) gpu.population = Number(populationRange.value);
+  if (autoFocusSnapshot) {
+    focusRegion = autoFocusSnapshot.region;
+    focusGenerationsRemaining = autoFocusSnapshot.remaining;
+  }
+  autoSettingsSnapshot = null;
+  autoFocusSnapshot = null;
+  updateControlLabels();
+}
+
+function endAutoMode(message) {
+  if (!autoMode) return;
+  autoMode = false;
+  if (autoFrameHandle !== null) cancelAnimationFrame(autoFrameHandle);
+  autoFrameHandle = null;
+  autoFrameLastTime = 0;
+  autoFrameSamples = [];
+  autoSimplificationPending = false;
+  running = false;
+  runButton.innerHTML = "▶ &nbsp; Start evolution";
+  autoModeStatus.textContent = "Auto mode is off.";
+  if (!autoSimplificationInProgress) restoreAutoSettings();
+  syncDecimationControls();
+  if (message) setNotice(message);
+}
+
+async function startAutoMode() {
+  if (autoMode || !gpu?.ready || !targetLoaded || decimationBusy || decimationPreview) return;
+  autoSettingsSnapshot = {
+    mutation: mutationRange.value,
+    structure: structureRange.value,
+    complexity: complexityRange.value,
+    decimate: decimateRange.value,
+    focus: focusRange.value,
+    population: populationRange.value
+  };
+  autoFocusSnapshot = { region: focusRegion, remaining: focusGenerationsRemaining };
+  autoMode = true;
+  setRunning(false);
+  autoModeStatus.textContent = "Auto mode: preparing the search settings.";
+  autoGenerations = 0;
+  autoFocusNextGeneration = AUTO_FOCUS_FIRST_GENERATION;
+  autoSimplifyNextGeneration = 0;
+  autoPopulationBest = null;
+  autoPopulationTrial = null;
+  autoPopulationNextTrial = 200;
+  autoSimplificationPending = false;
+  focusRegion = null;
+  focusGenerationsRemaining = 0;
+  autoFrameLastTime = 0;
+  autoFrameSamples = [];
+  autoFrameHandle = requestAnimationFrame(sampleAutoFrame);
+  try {
+    await waitForEvolutionToStop();
+    mutationRange.value = "0.65";
+    structureRange.value = "1";
+    complexityRange.value = "6";
+    decimateRange.value = "10";
+    focusRange.value = "70";
+    populationRange.value = "64";
+    const hasExistingGenome = Number.isFinite(bestError) || pendingGenome !== null;
+    if (!hasExistingGenome) {
+      triangleRange.step = "1";
+      triangleRange.value = "1";
+      await resetEvolution({ fromAutoMode: true });
+    } else if (gpu?.ready) {
+      gpu.population = Number(populationRange.value);
+    }
+    updateControlLabels();
+    updateAutoModeSchedule();
+    setNotice(hasExistingGenome
+      ? "Auto mode started from the current best or imported genome."
+      : "Auto mode started from one shape with high mutation and a 1% structural-change chance.");
+    setRunning(true);
+  } catch (error) {
+    endAutoMode("Auto mode could not start.");
+    throw error;
+  }
+}
+
+async function simplifyAutomatically() {
+  if (!autoMode || !gpu?.ready) return;
+  autoSimplificationInProgress = true;
+  autoModeStatus.textContent = "Auto mode: analyzing a 10% simplification at the shape limit.";
+  decimateRange.value = "10";
+  try {
+    await simplifyGenome();
+    if (!autoMode) {
+      if (decimationPreview) await discardSimplification();
+      return;
+    }
+    if (decimationPreview) {
+      if (keepSimplification()) {
+        autoModeStatus.textContent = `Auto mode kept the simplified genome at ${gpu.count} shapes.`;
+        setNotice(`Auto mode simplified the genome by 10% and resumed from ${gpu.count} shapes.`);
+      } else {
+        endAutoMode("Auto mode stopped because the simplification could not be kept; the previous genome remains available.");
+      }
+    } else if (autoMode) {
+      autoModeStatus.textContent = "Auto mode could not simplify at the shape limit; the current genome was retained.";
+    }
+  } catch (error) {
+    if (autoMode) endAutoMode("Auto mode stopped because automatic simplification failed.");
+    throw error;
+  } finally {
+    autoSimplificationInProgress = false;
+    autoSimplifyNextGeneration = autoGenerations + 150;
+    if (!autoMode) restoreAutoSettings();
+    syncDecimationControls();
+    if (autoMode && gpu?.ready) setRunning(true);
+  }
+}
+
+async function resetEvolution({ fromAutoMode = false } = {}) {
+  if (autoMode && !fromAutoMode) {
+    setNotice("Stop Auto mode before resetting evolution.", true);
+    return;
+  }
   if (decimationBusy || decimationPreview) return;
   setRunning(false);
   await waitForEvolutionToStop();
@@ -1000,6 +1399,10 @@ async function saveDna() {
 }
 
 async function importToonGenome(text) {
+  if (autoMode) {
+    setNotice("Stop Auto mode before importing a genome.", true);
+    return;
+  }
   try {
     const imported = parseToonGenome(text, Number(triangleRange.min), Number(triangleRange.max));
     complexityRange.value = String(Math.max(Number(complexityRange.value), imported.maxVertices));
@@ -1031,9 +1434,11 @@ async function loadToonFile(file) {
 
 function reportError(error) {
   console.error(error);
+  if (autoMode) endAutoMode("Auto mode stopped because an error occurred.");
   setGpuState("error", "Initialization error");
   setNotice(error instanceof Error ? error.message : String(error), true);
   runButton.disabled = true;
+  autoModeButton.disabled = true;
 }
 
 function stopCamera() {
@@ -1054,6 +1459,10 @@ function stopCamera() {
 }
 
 async function toggleCamera() {
+  if (autoMode) {
+    setNotice("Stop Auto mode before changing the camera target.", true);
+    return;
+  }
   if (cameraStream) {
     stopCamera();
     return;
@@ -1080,16 +1489,22 @@ async function toggleCamera() {
 }
 
 document.querySelector("#uploadButton").addEventListener("click", () => imageInput.click());
-imageInput.addEventListener("change", (event) => loadTargetImage(event.target.files[0], {
-  context: targetContext,
-  size: SIZE,
-  setImageName: (name) => { selectedImageName = name; },
-  setImageSource: setTargetBitmap,
-  stopCamera,
-  targetReady,
-  setNotice,
-  reportError
-}));
+imageInput.addEventListener("change", (event) => {
+  if (autoMode) {
+    setNotice("Stop Auto mode before changing the target image.", true);
+    return;
+  }
+  return loadTargetImage(event.target.files[0], {
+    context: targetContext,
+    size: SIZE,
+    setImageName: (name) => { selectedImageName = name; },
+    setImageSource: setTargetBitmap,
+    stopCamera,
+    targetReady,
+    setNotice,
+    reportError
+  });
+});
 document.querySelector("#sampleButton").addEventListener("click", makeSample);
 resolutionSelect.addEventListener("change", () => changeWorkingResolution().catch(reportError));
 document.querySelector("#toonUploadButton").addEventListener("click", () => toonFileInput.click());
@@ -1102,6 +1517,7 @@ if (cameraButton) {
 }
 if (captureButton) {
   captureButton.addEventListener("click", async () => {
+    if (autoMode) return;
     const video = document.querySelector("#cameraVideo");
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       setNotice("Wait for the camera preview to become available, then capture again.", true);
@@ -1130,12 +1546,24 @@ selectionOverlay.addEventListener("pointerup", (event) => finishFocusSelection(e
 selectionOverlay.addEventListener("pointercancel", (event) => finishFocusSelection(event, false));
 document.querySelector("#clearFocusButton").addEventListener("click", () => {
   focusRegion = null;
+  focusGenerationsRemaining = 0;
   draftFocusRegion = null;
   syncDecimationControls();
   setNotice("Focus area cleared. Guided mutations will sample across the whole image.");
 });
-runButton.addEventListener("click", () => setRunning(!running));
-resetButton.addEventListener("click", resetEvolution);
+autoModeButton.addEventListener("click", () => {
+  if (autoMode) {
+    endAutoMode("Auto mode stopped. The best image so far has been preserved.");
+  } else {
+    startAutoMode().catch(reportError);
+  }
+});
+runButton.addEventListener("click", () => {
+  if (!autoMode) setRunning(!running);
+});
+resetButton.addEventListener("click", () => {
+  if (!autoMode) resetEvolution();
+});
 triangleRange.addEventListener("input", updateControlLabels);
 triangleRange.addEventListener("change", () => {
   if (!targetLoaded) return;
