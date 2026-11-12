@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="700" viewBox="0 0 1280 700" fill="none">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1280" y2="700" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1b1d19"/>
+      <stop offset="1" stop-color="#10110f"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="390" y1="260" x2="390" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c1d5b3"/>
+      <stop offset="1" stop-color="#78948a"/>
+    </linearGradient>
+    <linearGradient id="candidate" x1="775" y1="260" x2="775" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#94b198"/>
+      <stop offset="1" stop-color="#415e5b"/>
+    </linearGradient>
+    <clipPath id="target-clip"><rect x="68" y="239" width="390" height="260" rx="8"/></clipPath>
+    <clipPath id="candidate-clip"><rect x="480" y="239" width="390" height="260" rx="8"/></clipPath>
+  </defs>
+  <rect width="1280" height="700" rx="24" fill="url(#background)"/>
+  <circle cx="1195" cy="92" r="220" fill="#d7ff70" fill-opacity=".035"/>
+  <path d="M56 116H1224" stroke="#42443b"/>
+  <path d="M76 61L90 86H62L76 61Z" stroke="#d7ff70" stroke-width="2"/>
+  <text x="108" y="70" fill="#f3f2e9" font-family="Arial,sans-serif" font-size="17" font-weight="700" letter-spacing="2">FORM &amp; SIGNAL</text>
+  <text x="108" y="92" fill="#96988e" font-family="Arial,sans-serif" font-size="13">An experiment in evolving images</text>
+  <circle cx="1104" cy="77" r="5" fill="#d7ff70"/>
+  <text x="1120" y="82" fill="#c6c8bc" font-family="Arial,sans-serif" font-size="13">WEBGPU READY</text>
+
+  <text x="68" y="164" fill="#d7ff70" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="2">GENERATIVE STUDY / 001</text>
+  <text x="68" y="207" fill="#f3f2e9" font-family="Arial,sans-serif" font-size="32" font-weight="700">Let the image find its own form.</text>
+  <text x="68" y="228" fill="#a5a79d" font-family="Arial,sans-serif" font-size="13">A population of translucent polygons competes to recreate the image.</text>
+
+  <rect x="56" y="258" width="844" height="380" rx="14" fill="#171915" stroke="#3b3d35"/>
+  <text x="68" y="284" fill="#d8d9cf" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">01  TARGET</text>
+  <text x="385" y="284" fill="#85877e" font-family="Arial,sans-serif" font-size="10" letter-spacing="1.2">REFERENCE</text>
+  <text x="480" y="284" fill="#d8d9cf" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">02  EVOLVED</text>
+  <text x="785" y="284" fill="#85877e" font-family="Arial,sans-serif" font-size="10" letter-spacing="1.2">BEST CANDIDATE</text>
+  <rect x="68" y="296" width="390" height="260" rx="8" fill="url(#sky)"/>
+  <g clip-path="url(#target-clip)">
+    <circle cx="365" cy="352" r="35" fill="#f2c77f"/>
+    <path d="M50 480L192 325L316 480H50Z" fill="#486b65"/>
+    <path d="M190 480L355 334L493 480H190Z" fill="#34564f"/>
+    <path d="M54 469L174 396L261 469H54Z" fill="#2d4d47"/>
+    <path d="M249 469L358 398L473 469H249Z" fill="#294740"/>
+    <path d="M55 482C134 450 198 464 265 485C333 506 396 493 470 461V565H55V482Z" fill="#d8a977"/>
+    <path d="M89 321L160 361L112 370Z" fill="#769487" fill-opacity=".5"/>
+  </g>
+  <rect x="480" y="296" width="390" height="260" rx="8" fill="url(#candidate)"/>
+  <g clip-path="url(#candidate-clip)">
+    <circle cx="777" cy="352" r="34" fill="#e1b976"/>
+    <path d="M465 488L578 355L649 453L711 395L787 490H465Z" fill="#526f68"/>
+    <path d="M570 490L709 355L775 423L829 361L895 490H570Z" fill="#355650"/>
+    <path d="M465 493L578 430L637 480L702 447L765 500H465Z" fill="#294843"/>
+    <path d="M660 490L752 437L809 476L852 446L890 478V554H660Z" fill="#253f3b"/>
+    <path d="M465 488L578 355L649 453L578 424Z" fill="#76988a" fill-opacity=".72"/>
+    <path d="M578 355L711 395L649 453Z" fill="#45655d" fill-opacity=".82"/>
+    <path d="M709 355L775 423L711 395Z" fill="#6d8d7e" fill-opacity=".84"/>
+    <path d="M829 361L775 423L852 446Z" fill="#56756a" fill-opacity=".82"/>
+    <path d="M465 493C560 461 601 471 666 493C747 521 816 493 890 466V565H465V493Z" fill="#c89d70"/>
+    <path d="M465 493L578 430L637 480L560 470Z" fill="#385a50" fill-opacity=".9"/>
+    <path d="M752 437L809 476L765 500L702 447Z" fill="#3c5a51" fill-opacity=".9"/>
+  </g>
+  <rect x="68.5" y="296.5" width="389" height="259" rx="7.5" stroke="#f1f0e5" stroke-opacity=".14"/>
+  <rect x="480.5" y="296.5" width="389" height="259" rx="7.5" stroke="#f1f0e5" stroke-opacity=".14"/>
+  <path d="M68 578H870" stroke="#3b3d35"/>
+  <text x="68" y="603" fill="#898b81" font-family="Arial,sans-serif" font-size="10" letter-spacing="1.3">BEST MULTI-SCALE ERROR</text>
+  <text x="68" y="625" fill="#f2f1e8" font-family="Arial,sans-serif" font-size="17">0.084</text>
+  <text x="269" y="603" fill="#898b81" font-family="Arial,sans-serif" font-size="10" letter-spacing="1.3">GENERATION</text>
+  <text x="269" y="625" fill="#f2f1e8" font-family="Arial,sans-serif" font-size="17">1,248</text>
+  <text x="467" y="603" fill="#898b81" font-family="Arial,sans-serif" font-size="10" letter-spacing="1.3">LIVE SHAPES</text>
+  <text x="467" y="625" fill="#f2f1e8" font-family="Arial,sans-serif" font-size="17">128</text>
+  <rect x="658" y="595" width="212" height="28" rx="14" fill="#d7ff70"/>
+  <text x="764" y="613" fill="#22251d" font-family="Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="1.2" text-anchor="middle">EVOLUTION RUNS LOCALLY</text>
+
+  <rect x="924" y="258" width="300" height="380" rx="14" fill="#171915" stroke="#3b3d35"/>
+  <text x="950" y="291" fill="#d8d9cf" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">01 / CHOOSE A TARGET</text>
+  <rect x="950" y="309" width="117" height="40" rx="7" fill="#252720" stroke="#484a40"/>
+  <text x="1008" y="334" fill="#e4e4d9" font-family="Arial,sans-serif" font-size="11" text-anchor="middle">Upload image</text>
+  <rect x="1077" y="309" width="121" height="40" rx="7" fill="#252720" stroke="#484a40"/>
+  <text x="1137" y="334" fill="#e4e4d9" font-family="Arial,sans-serif" font-size="11" text-anchor="middle">Try sample</text>
+  <text x="950" y="383" fill="#d2d3c8" font-family="Arial,sans-serif" font-size="12">Working image size</text>
+  <rect x="950" y="397" width="248" height="39" rx="7" fill="#20211d" stroke="#494b41"/>
+  <text x="966" y="421" fill="#e4e4d9" font-family="Arial,sans-serif" font-size="12">160 × 160 / fastest</text>
+  <path d="M1178 412L1184 418L1190 412" stroke="#b5b7aa" stroke-width="1.5"/>
+  <path d="M950 460H1198" stroke="#3b3d35"/>
+  <text x="950" y="488" fill="#d8d9cf" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">03 / SET THE GENOME</text>
+  <text x="950" y="523" fill="#c7c8bd" font-family="Arial,sans-serif" font-size="12">Starting shape count</text>
+  <text x="1198" y="523" fill="#d7ff70" font-family="Arial,sans-serif" font-size="12" text-anchor="end">128</text>
+  <path d="M953 543H1195" stroke="#4b4d43" stroke-width="3" stroke-linecap="round"/>
+  <path d="M953 543H1065" stroke="#d7ff70" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="1065" cy="543" r="7" fill="#d7ff70" stroke="#252720" stroke-width="3"/>
+  <text x="950" y="579" fill="#c7c8bd" font-family="Arial,sans-serif" font-size="12">Mutation strength</text>
+  <text x="1198" y="579" fill="#d7ff70" font-family="Arial,sans-serif" font-size="12" text-anchor="end">0.350</text>
+  <path d="M953 599H1195" stroke="#4b4d43" stroke-width="3" stroke-linecap="round"/>
+  <path d="M953 599H1090" stroke="#d7ff70" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="1090" cy="599" r="7" fill="#d7ff70" stroke="#252720" stroke-width="3"/>
+</svg>

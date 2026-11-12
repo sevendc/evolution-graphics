@@ -4,6 +4,12 @@ A browser-based WebGPU experiment that evolves a picture from translucent polygo
 
 On wide screens, focus and simplification (steps 4 and 5) appear in their own panel to the right of the main controls. At narrower widths, that panel moves below the image and main controls.
 
+## Live demo
+
+Try **[Form & Signal on GitHub Pages](https://sevendc.github.io/evolution-graphics/)**. The page and its preview artwork are hosted with this repository; uploaded images and genome data stay in your browser.
+
+![Illustration of the Form & Signal image-evolution workspace](./assets/form-and-signal-preview.svg)
+
 ## Requirements
 
 - Node.js (no third-party packages are required)
@@ -41,12 +47,14 @@ TOON version 1 triangle genomes remain supported and are still exported when eve
 
 - [`index.html`](./index.html) — Application markup and relative links to its stylesheet and JavaScript entry point.
 - [`styles.css`](./styles.css) — Application styling and responsive layout.
+- [`assets/form-and-signal-preview.svg`](./assets/form-and-signal-preview.svg) — Original vector preview artwork used in this README and hosted with the site.
 - [`js/main.js`](./js/main.js) — Application startup, UI behavior, and evolution orchestration.
 - [`js/media.js`](./js/media.js) — Sample artwork rendering and local image loading helpers.
 - [`js/genome.js`](./js/genome.js) — TOON genome parsing, serialization, and downloads.
 - [`js/gpu/shaders.js`](./js/gpu/shaders.js) — WGSL shader source used by WebGPU.
 - [`server.js`](./server.js) — Minimal static-file server used by `npm start`.
 - [`package.json`](./package.json) — Project metadata and start script.
+- [`documentation/plans.md`](./documentation/plans.md) — Living list of future feature ideas, fixes to investigate, risks, and acceptance criteria.
 - [`plan.md`](./plan.md), [`plan2.md`](./plan2.md), [`plan3.md`](./plan3.md), and [`plan4.md`](./plan4.md) — Implementation notes and follow-up ideas.
 - [`whatsapp-image-2024-09-12-at-17-15-37_4652b8f4-genome.toon`](./whatsapp-image-2024-09-12-at-17-15-37_4652b8f4-genome.toon) — Example TOON genome.
 
