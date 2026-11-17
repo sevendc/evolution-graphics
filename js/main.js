@@ -1,5 +1,5 @@
 import { mutationShader, evaluationShader, finalizeShader, rasterShader, guideShader } from "./gpu/shaders.js";
-import { downloadBlob, parseToonGenome, safeFilename, serializeToonGenome } from "./genome.js";
+import { downloadBlob, parseToonGenome, safeFilename, serializeJavaScriptGenome, serializeToonGenome } from "./genome.js";
 import { drawSourceCover, loadImageFile as loadTargetImage, makeSampleArtwork } from "./media.js";
 import {
   AUTO_FOCUS_DURATION,
@@ -159,6 +159,7 @@ function syncDecimationControls() {
   document.querySelector("#discardDecimationButton").disabled = !decimationPreview || decimationBusy;
   document.querySelector("#saveImageButton").disabled = locked || unavailable;
   document.querySelector("#saveDnaButton").disabled = locked || unavailable;
+  document.querySelector("#saveJavaScriptButton").disabled = locked || unavailable;
   autoModeButton.disabled = autoMode ? false : operationLocked || !gpu?.ready || !targetLoaded;
   autoModeButton.textContent = autoMode ? "Stop auto mode" : "Auto mode";
   syncFocusControls(locked);
@@ -1167,6 +1168,25 @@ async function saveDna() {
   }
 }
 
+async function saveJavaScript() {
+  if (!gpu?.ready) return;
+  try {
+    const encoder = device.createCommandEncoder({ label: "copy best genome for JavaScript export" });
+    encoder.copyBufferToBuffer(gpu.bestBuffer, 0, gpu.dnaReadback, 0, gpu.genomeBytes);
+    device.queue.submit([encoder.finish()]);
+    await gpu.dnaReadback.mapAsync(GPUMapMode.READ);
+    const raw = new Float32Array(gpu.dnaReadback.getMappedRange().slice(0));
+    gpu.dnaReadback.unmap();
+    const script = serializeJavaScriptGenome(raw, gpu.count, SIZE, SIZE, bestError);
+    downloadBlob(
+      new Blob([script], { type: "application/javascript;charset=utf-8" }),
+      `${safeFilename(selectedImageName)}-render.js`
+    );
+  } catch (error) {
+    reportError(error);
+  }
+}
+
 async function importToonGenome(text) {
   if (autoMode) {
     setNotice("Stop Auto mode before importing a genome.", true);
@@ -1285,7 +1305,8 @@ bindApplicationEvents({
   keepDecimationButton: document.querySelector("#keepDecimationButton"),
   discardDecimationButton: document.querySelector("#discardDecimationButton"),
   saveImageButton: document.querySelector("#saveImageButton"),
-  saveDnaButton: document.querySelector("#saveDnaButton")
+  saveDnaButton: document.querySelector("#saveDnaButton"),
+  saveJavaScriptButton: document.querySelector("#saveJavaScriptButton")
 }, {
   uploadImage: (file) => {
     if (autoMode) {
@@ -1361,6 +1382,7 @@ bindApplicationEvents({
     }, "image/png");
   },
   saveDna,
+  saveJavaScript,
   onPageHide: () => targetBitmap?.close()
 });
 

@@ -16,7 +16,9 @@ When adding an entry, include the user problem, a small proposed solution, notab
 
 ### Export a standalone JavaScript canvas renderer
 
-**Status: Idea**
+**Status: In progress**
+
+The export button and generator are being added next to the existing PNG and TOON actions. The initial version produces a single-script renderer that draws the current genome onto any 2D canvas without app code or network calls.
 
 Export the current best genome as JavaScript source that draws the image into a supplied HTML canvas, instead of requiring the app or a TOON importer to view it. The generated artifact should be portable and usable in a small page or another local project.
 

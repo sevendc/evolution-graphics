@@ -27,5 +27,6 @@ export function bindApplicationEvents(controls, actions) {
   controls.discardDecimationButton.addEventListener("click", actions.discardSimplification);
   controls.saveImageButton.addEventListener("click", actions.saveImage);
   controls.saveDnaButton.addEventListener("click", actions.saveDna);
+  if (controls.saveJavaScriptButton) controls.saveJavaScriptButton.addEventListener("click", actions.saveJavaScript);
   window.addEventListener("pagehide", actions.onPageHide, { once: true });
 }
