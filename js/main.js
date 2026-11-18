@@ -1177,7 +1177,7 @@ async function saveJavaScript() {
     await gpu.dnaReadback.mapAsync(GPUMapMode.READ);
     const raw = new Float32Array(gpu.dnaReadback.getMappedRange().slice(0));
     gpu.dnaReadback.unmap();
-    const script = serializeJavaScriptGenome(raw, gpu.count, SIZE, SIZE, bestError);
+    const script = serializeJavaScriptGenome(raw, gpu.count, SIZE, SIZE);
     downloadBlob(
       new Blob([script], { type: "application/javascript;charset=utf-8" }),
       `${safeFilename(selectedImageName)}-render.js`
