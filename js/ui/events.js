@@ -1,6 +1,8 @@
 export function bindApplicationEvents(controls, actions) {
   controls.uploadButton.addEventListener("click", () => controls.imageInput.click());
   controls.imageInput.addEventListener("change", (event) => actions.uploadImage(event.target.files[0]));
+  if (controls.videoUploadButton) controls.videoUploadButton.addEventListener("click", () => controls.videoInput.click());
+  if (controls.videoInput) controls.videoInput.addEventListener("change", (event) => actions.uploadVideo(event.target.files[0]));
   controls.sampleButton.addEventListener("click", actions.makeSample);
   controls.resolutionSelect.addEventListener("change", actions.changeWorkingResolution);
   controls.toonUploadButton.addEventListener("click", () => controls.toonFileInput.click());

@@ -1,6 +1,6 @@
 import { mutationShader, evaluationShader, finalizeShader, rasterShader, guideShader } from "./gpu/shaders.js";
 import { downloadBlob, parseToonGenome, safeFilename, serializeJavaScriptGenome, serializeToonGenome } from "./genome.js";
-import { drawSourceCover, loadImageFile as loadTargetImage, makeSampleArtwork } from "./media.js";
+import { drawSourceCover, loadImageFile as loadTargetImage, loadVideoFile as loadTargetVideo, makeSampleArtwork } from "./media.js";
 import {
   AUTO_FOCUS_DURATION,
   AUTO_FOCUS_FIRST_GENERATION,
@@ -27,6 +27,13 @@ const resultCanvas = document.querySelector("#resultCanvas");
 const targetContext = targetCanvas.getContext("2d", { willReadFrequently: true });
 const resultContext = resultCanvas.getContext("2d");
 const imageInput = document.querySelector("#imageInput");
+const videoInput = document.querySelector("#videoInput");
+const videoTargetCanvas = document.querySelector("#videoTargetCanvas");
+const videoResultCanvas = document.querySelector("#videoResultCanvas");
+const videoTargetContext = videoTargetCanvas.getContext("2d");
+const videoResultContext = videoResultCanvas.getContext("2d");
+const videoPreviewCanvas = document.querySelector("#videoPreviewCanvas");
+const videoPreviewContext = videoPreviewCanvas.getContext("2d");
 const resolutionSelect = document.querySelector("#resolutionSelect");
 const runButton = document.querySelector("#runButton");
 const resetButton = document.querySelector("#resetButton");
@@ -61,6 +68,13 @@ let initialError = Infinity;
 let running = false;
 let targetLoaded = false;
 let targetBitmap = null;
+let videoFrames = [];
+let videoFrameIndex = 0;
+let videoFrameStartGeneration = 0;
+let videoMode = false;
+let videoAcceptedGenomes = [];
+let videoPlayTimer = null;
+let videoPlaying = false;
 let sampleTarget = true;
 let resolutionChanging = false;
 let cameraStream = null;
@@ -134,6 +148,7 @@ function updateControlLabels() {
   document.querySelector("#focusValue").textContent = `${focusRange.value}%`;
   syncFocusControls();
   syncDecimationControls();
+  syncVideoFrameUi();
 }
 
 function syncDecimationControls() {
@@ -141,7 +156,7 @@ function syncDecimationControls() {
   const locked = operationLocked || autoMode;
   const unavailable = !gpu?.ready || !Number.isFinite(bestError);
   selectionOverlay.setAttribute("aria-disabled", String(!targetLoaded || locked));
-  for (const id of ["uploadButton", "sampleButton", "toonUploadButton", "toonImportButton", "imageInput", "toonFileInput", "toonText", "cameraButton", "captureButton"]) {
+  for (const id of ["uploadButton", "sampleButton", "toonUploadButton", "toonImportButton", "imageInput", "videoInput", "toonFileInput", "toonText", "cameraButton", "captureButton"]) {
     const control = document.querySelector(`#${id}`);
     if (control) control.disabled = locked;
   }
@@ -195,6 +210,8 @@ function makeSample() {
   if (autoMode) return;
   targetBitmap?.close();
   targetBitmap = null;
+  videoMode = false;
+  videoFrames = [];
   sampleTarget = true;
   makeSampleArtwork(targetContext, SIZE);
   selectedImageName = "sample";
@@ -288,7 +305,7 @@ function disposeGpu() {
 }
 
 async function targetReady() {
-  if (autoMode) endAutoMode("Auto mode stopped because the target image changed.");
+  if (autoMode && !videoMode) endAutoMode("Auto mode stopped because the target image changed.");
   setRunning(false);
   decimationPreview = null;
   decimationBusy = false;
@@ -676,6 +693,7 @@ async function updatePreview() {
     bestError = mse;
     if (!Number.isFinite(initialError)) initialError = mse;
     resultContext.putImageData(new ImageData(image, SIZE, SIZE), 0, 0);
+    if (videoMode) videoResultContext.putImageData(new ImageData(image, SIZE, SIZE), 0, 0);
     document.querySelector("#fitnessValue").textContent = mse.toFixed(4);
     document.querySelector("#fitnessNote").innerHTML = "1×, ½×, ¼×, ⅛× scales<br>Lower is better";
     document.querySelector("#improvementStat").textContent = `${improvementPercent().toFixed(1)}%`;
@@ -967,6 +985,172 @@ function improvementPercent() {
   return Math.max(0, (1 - bestError / initialError) * 100);
 }
 
+function renderRawGenome(context, raw, count, width, height) {
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, width, height);
+  const colorOffset = MAX_VERTICES * 2;
+  for (let index = 0; index < count; index += 1) {
+    const offset = index * SHAPE_FLOATS;
+    const vertexCount = raw[offset + colorOffset + 4];
+    context.beginPath();
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      const x = raw[offset + vertex * 2] * width;
+      const y = raw[offset + vertex * 2 + 1] * height;
+      if (vertex === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    }
+    context.closePath();
+    context.fillStyle = `rgba(${Math.round(raw[offset + colorOffset] * 255)},${Math.round(raw[offset + colorOffset + 1] * 255)},${Math.round(raw[offset + colorOffset + 2] * 255)},${raw[offset + colorOffset + 3]})`;
+    context.fill();
+  }
+}
+
+function drawPreviewGenome(index) {
+  let acceptedIndex = index;
+  while (acceptedIndex >= 0 && !videoAcceptedGenomes[acceptedIndex]) acceptedIndex -= 1;
+  if (acceptedIndex < 0) return;
+  const accepted = videoAcceptedGenomes[acceptedIndex];
+  renderRawGenome(videoPreviewContext, accepted.genome, accepted.count, SIZE, SIZE);
+}
+
+function syncVideoFrameUi() {
+  document.querySelector("#videoFrameTag").textContent = videoFrames.length
+    ? `FRAME ${videoFrameIndex + 1} / ${videoFrames.length}`
+    : "NO VIDEO";
+  const frameSearch = document.querySelector("#videoFrameSearch");
+  if (frameSearch) frameSearch.setAttribute("aria-label", videoFrames.length
+    ? `Frame number, 1 through ${videoFrames.length}`
+    : "Frame number");
+  const frameSlider = document.querySelector("#videoFrameSlider");
+  if (frameSlider) {
+    frameSlider.max = String(Math.max(1, videoFrames.length));
+    frameSlider.value = String(videoFrameIndex + 1);
+  }
+  document.querySelector("#videoProgress").textContent = videoFrames.length
+    ? `${videoAcceptedGenomes.filter(Boolean).length} of ${videoFrames.length} frames accepted`
+    : "No frames accepted.";
+  document.querySelector("#videoAcceptNextButton").disabled = !videoMode || !gpu?.ready || !Number.isFinite(bestError);
+  document.querySelector("#videoRunButton").disabled = !videoMode || !gpu?.ready;
+  document.querySelector("#videoPreviousButton").disabled = videoFrameIndex <= 0;
+  document.querySelector("#videoNextButton").disabled = !videoFrames.length || videoFrameIndex >= videoFrames.length - 1;
+  document.querySelector("#videoSaveButton").disabled = videoAcceptedGenomes.filter(Boolean).length === 0;
+  document.querySelector("#videoPlayButton").disabled = videoAcceptedGenomes.filter(Boolean).length === 0;
+}
+
+async function showVideoFrame(index) {
+  if (!videoFrames.length || index < 0 || index >= videoFrames.length) return;
+  setRunning(false);
+  await waitForEvolutionToStop();
+  videoFrameIndex = index;
+  targetContext.putImageData(videoFrames[index], 0, 0);
+  videoTargetCanvas.width = SIZE;
+  videoTargetCanvas.height = SIZE;
+  videoTargetContext.putImageData(videoFrames[index], 0, 0);
+  pendingGenome = videoAcceptedGenomes[index]?.genome?.slice()
+    || videoAcceptedGenomes.slice(0, index).reverse().find(Boolean)?.genome?.slice()
+    || null;
+  if (pendingGenome) triangleRange.value = String(videoAcceptedGenomes[index]?.count || pendingGenome.length / SHAPE_FLOATS);
+  await targetReady();
+  if (pendingGenome) renderRawGenome(
+    videoResultContext,
+    pendingGenome,
+    videoAcceptedGenomes[index]?.count || pendingGenome.length / SHAPE_FLOATS,
+    SIZE,
+    SIZE
+  );
+  else {
+    videoResultContext.fillStyle = "#fff";
+    videoResultContext.fillRect(0, 0, SIZE, SIZE);
+  }
+  drawPreviewGenome(index);
+  syncVideoFrameUi();
+}
+
+async function acceptVideoFrameAndNext() {
+  if (!videoMode || !gpu?.ready || !Number.isFinite(bestError)) {
+    setNotice("Wait for a valid evolved frame before accepting it.", true);
+    return;
+  }
+  const shouldResume = running || (autoMode && running);
+  setRunning(false);
+  await waitForEvolutionToStop();
+  const genome = await readBestGenome();
+  videoAcceptedGenomes[videoFrameIndex] = { count: gpu.count, genome };
+  drawPreviewGenome(videoFrameIndex);
+  syncVideoFrameUi();
+  if (videoFrameIndex + 1 >= videoFrames.length) {
+    setNotice("The final frame is accepted. Play the preview or save the animation project.");
+    return;
+  }
+  await showVideoFrame(videoFrameIndex + 1);
+  if (shouldResume) setRunning(true);
+  setNotice(`Frame ${videoFrameIndex + 1} of ${videoFrames.length} is ready. Evolve and accept it when satisfied.`);
+}
+
+function stopVideoPreview() {
+  if (videoPlayTimer !== null) {
+    clearInterval(videoPlayTimer);
+    videoPlayTimer = null;
+  }
+  videoPlaying = false;
+  document.querySelector("#videoPreviewTag").textContent = "STOPPED";
+  document.querySelector("#videoPlayButton").textContent = "Play preview";
+}
+
+function playVideoPreview() {
+  if (videoPlaying) {
+    stopVideoPreview();
+    return;
+  }
+  const acceptedCount = videoAcceptedGenomes.filter(Boolean).length;
+  if (!acceptedCount) return;
+  let previewIndex = 0;
+  videoPlaying = true;
+  document.querySelector("#videoPreviewTag").textContent = "PLAYING";
+  document.querySelector("#videoPlayButton").textContent = "Stop preview";
+  videoPlayTimer = setInterval(() => {
+    drawPreviewGenome(previewIndex);
+    previewIndex += 1;
+    if (previewIndex >= videoFrames.length) previewIndex = 0;
+  }, 1000 / 30);
+}
+
+function saveVideoProject() {
+  if (!videoAcceptedGenomes.filter(Boolean).length) return;
+  const compactFrames = videoAcceptedGenomes.map((accepted, index) => {
+    if (!accepted) return { timestamp: index / 30, genome: null };
+    const values = [];
+    const colorOffset = MAX_VERTICES * 2;
+    for (let shapeIndex = 0; shapeIndex < accepted.count; shapeIndex += 1) {
+      const offset = shapeIndex * SHAPE_FLOATS;
+      const vertexCount = accepted.genome[offset + colorOffset + 4];
+      const shape = [];
+      for (let color = 0; color < 4; color += 1) {
+        shape.push(Number(accepted.genome[offset + colorOffset + color].toFixed(6)));
+      }
+      for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+        shape.push(
+          Number(accepted.genome[offset + vertex * 2].toFixed(6)),
+          Number(accepted.genome[offset + vertex * 2 + 1].toFixed(6))
+        );
+      }
+      values.push(shape);
+    }
+    return { timestamp: index / 30, count: accepted.count, genome: values };
+  });
+  const project = {
+    format: "form-signal-video",
+    version: 1,
+    fps: 30,
+    size: SIZE,
+    frames: compactFrames
+  };
+  downloadBlob(
+    new Blob([JSON.stringify(project, null, 2)], { type: "application/json;charset=utf-8" }),
+    `${safeFilename(selectedImageName)}-animation.json`
+  );
+}
+
 async function evolve() {
   if (busy || !running || !gpu?.ready) return;
   busy = true;
@@ -1012,6 +1196,8 @@ function setRunning(value) {
   }
   running = value;
   runButton.innerHTML = value ? "Ⅱ &nbsp; Pause evolution" : "▶ &nbsp; Start evolution";
+  const videoRunButton = document.querySelector("#videoRunButton");
+  if (videoRunButton) videoRunButton.textContent = value ? "Pause evolution" : "Start evolution";
   syncDecimationControls();
   if (value) evolve();
 }
@@ -1281,7 +1467,9 @@ const cameraButton = document.querySelector("#cameraButton");
 const captureButton = document.querySelector("#captureButton");
 bindApplicationEvents({
   uploadButton: document.querySelector("#uploadButton"),
+  videoUploadButton: document.querySelector("#videoUploadButton"),
   imageInput,
+  videoInput,
   sampleButton: document.querySelector("#sampleButton"),
   resolutionSelect,
   toonUploadButton: document.querySelector("#toonUploadButton"),
@@ -1323,6 +1511,40 @@ bindApplicationEvents({
       setNotice,
       reportError
     });
+  },
+  uploadVideo: async (file) => {
+    if (autoMode) {
+      setNotice("Stop Auto mode before changing the target video.", true);
+      return;
+    }
+    if (!file || !file.type.startsWith("video/")) {
+      setNotice("Choose a supported video file.", true);
+      return;
+    }
+    setRunning(false);
+    videoMode = false;
+    await loadTargetVideo(file, {
+      context: targetContext,
+      size: SIZE,
+      setImageName: (name) => { selectedImageName = name; },
+      setVideoFrames: (frames) => {
+        videoFrames = frames;
+        videoFrameIndex = 0;
+        videoFrameStartGeneration = 0;
+      },
+      stopCamera,
+      targetReady,
+      setNotice,
+      reportError
+    });
+    if (videoFrames.length > 0) {
+      videoMode = true;
+      videoAcceptedGenomes = [];
+      setWorkspaceMode("video");
+      await showVideoFrame(0);
+      syncVideoFrameUi();
+      setNotice(`Video loaded: ${videoFrames.length} frames at an approximate 30 fps. Evolve frame 1, then accept it to continue.`);
+    }
   },
   makeSample,
   changeWorkingResolution: () => changeWorkingResolution().catch(reportError),
@@ -1385,6 +1607,65 @@ bindApplicationEvents({
   saveJavaScript,
   onPageHide: () => targetBitmap?.close()
 });
+
+function setWorkspaceMode(mode) {
+  const video = mode === "video";
+  document.querySelector("#imageWorkspace").hidden = video;
+  document.querySelector("#videoWorkspace").hidden = !video;
+  document.querySelector(".intro").hidden = video;
+  document.querySelector("footer").hidden = video;
+  document.querySelector("#imageModeTab").classList.toggle("active", !video);
+  document.querySelector("#videoModeTab").classList.toggle("active", video);
+  document.querySelector("#imageModeTab").setAttribute("aria-selected", String(!video));
+  document.querySelector("#videoModeTab").setAttribute("aria-selected", String(video));
+}
+
+document.querySelector("#imageModeTab").addEventListener("click", () => {
+  setWorkspaceMode("image");
+});
+document.querySelector("#videoModeTab").addEventListener("click", () => {
+  setWorkspaceMode("video");
+});
+document.querySelector("#videoUploadButton").addEventListener("click", () => videoInput.click());
+document.querySelector("#videoRunButton").addEventListener("click", () => {
+  if (gpu?.ready && videoMode) setRunning(!running);
+});
+document.querySelector("#videoAcceptNextButton").addEventListener("click", () => {
+  acceptVideoFrameAndNext().catch(reportError);
+});
+document.querySelector("#videoPreviousButton").addEventListener("click", () => {
+  showVideoFrame(videoFrameIndex - 1).catch(reportError);
+});
+document.querySelector("#videoNextButton").addEventListener("click", () => {
+  showVideoFrame(videoFrameIndex + 1).catch(reportError);
+});
+function parseVideoFrameQuery(query) {
+  const value = query.trim();
+  if (/^\d+$/.test(value)) return Math.max(1, Math.min(videoFrames.length, Number(value))) - 1;
+  const timestamp = value.match(/^(\d+):([0-5]?\d)(?:[.:](\d{1,3}))?$/);
+  if (timestamp) {
+    const seconds = Number(timestamp[1]) * 60 + Number(timestamp[2]) + (timestamp[3] ? Number(`0.${timestamp[3]}`) : 0);
+    return Math.max(0, Math.min(videoFrames.length - 1, Math.floor(seconds * 30)));
+  }
+  return null;
+}
+document.querySelector("#videoFrameSearchButton").addEventListener("click", () => {
+  if (!videoFrames.length) return;
+  const index = parseVideoFrameQuery(document.querySelector("#videoFrameSearch").value);
+  if (index === null) {
+    setNotice("Enter a frame number or timestamp such as 120 or 00:05.", true);
+    return;
+  }
+  showVideoFrame(index).catch(reportError);
+});
+document.querySelector("#videoFrameSearch").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") document.querySelector("#videoFrameSearchButton").click();
+});
+document.querySelector("#videoFrameSlider").addEventListener("change", (event) => {
+  showVideoFrame(Number(event.target.value) - 1).catch(reportError);
+});
+document.querySelector("#videoPlayButton").addEventListener("click", playVideoPreview);
+document.querySelector("#videoSaveButton").addEventListener("click", saveVideoProject);
 
 updateControlLabels();
 if (navigator.gpu) {

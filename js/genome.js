@@ -111,6 +111,9 @@ export function serializeJavaScriptGenome(raw, count, width = 160, height = 160)
   if (!Number.isInteger(count) || count <= 0 || raw.length < count * SHAPE_FLOATS) {
     throw new Error("Cannot export a JavaScript renderer for an empty or invalid genome.");
   }
+  if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
+    throw new Error("Cannot export a JavaScript renderer with invalid canvas dimensions.");
+  }
   const shapes = [];
   const colorOffset = MAX_VERTICES * 2;
   for (let i = 0; i < count; i += 1) {
@@ -121,18 +124,26 @@ export function serializeJavaScriptGenome(raw, count, width = 160, height = 160)
     }
     const values = [];
     for (let color = 0; color < 4; color += 1) {
-      values.push(Number(raw[offset + colorOffset + color].toFixed(6)));
+      const value = raw[offset + colorOffset + color];
+      if (!Number.isFinite(value) || value < 0 || value > 1) {
+        throw new Error(`Shape ${i + 1} has invalid color or opacity data for JavaScript export.`);
+      }
+      values.push(Number(value.toFixed(6)));
     }
     for (let vertex = 0; vertex < vertexCount; vertex += 1) {
-      values.push(
-        Number(raw[offset + vertex * 2].toFixed(6)),
-        Number(raw[offset + vertex * 2 + 1].toFixed(6))
-      );
+      const x = raw[offset + vertex * 2];
+      const y = raw[offset + vertex * 2 + 1];
+      if (!Number.isFinite(x) || x < 0 || x > 1 || !Number.isFinite(y) || y < 0 || y > 1) {
+        throw new Error(`Shape ${i + 1} has invalid polygon coordinates for JavaScript export.`);
+      }
+      values.push(Number(x.toFixed(6)), Number(y.toFixed(6)));
     }
     shapes.push(`[${values.join(",")}]`);
   }
-  return `const genome=[${shapes.join(",")}];
-function render(ctx,width=${width},height=${height}){if(!ctx||typeof ctx.beginPath!=="function")throw Error("A 2D canvas context is required.");width=Number.isFinite(width)&&width>0?width:${width};height=Number.isFinite(height)&&height>0?height:${height};ctx.clearRect(0,0,width,height);for(const s of genome){ctx.beginPath();for(let i=4;i<s.length;i+=2){if(i===4)ctx.moveTo(s[i]*width,s[i+1]*height);else ctx.lineTo(s[i]*width,s[i+1]*height)}ctx.closePath();ctx.fillStyle="rgba("+Math.round(s[0]*255)+","+Math.round(s[1]*255)+","+Math.round(s[2]*255)+","+s[3]+")";ctx.fill()}}
+  return `// Standalone evolution renderer
+// Usage: render(document.querySelector("canvas").getContext("2d"), width, height)
+const genome=[${shapes.join(",")}];
+function render(ctx,width=${width},height=${height}){if(!ctx||typeof ctx.beginPath!=="function")throw Error("A 2D canvas context is required.");width=Number.isFinite(width)&&width>0?width:${width};height=Number.isFinite(height)&&height>0?height:${height};ctx.fillStyle="#fff";ctx.fillRect(0,0,width,height);for(const s of genome){ctx.beginPath();for(let i=4;i<s.length;i+=2){if(i===4)ctx.moveTo(s[i]*width,s[i+1]*height);else ctx.lineTo(s[i]*width,s[i+1]*height)}ctx.closePath();ctx.fillStyle="rgba("+Math.round(s[0]*255)+","+Math.round(s[1]*255)+","+Math.round(s[2]*255)+","+s[3]+")";ctx.fill()}}
 if(typeof module!=="undefined"&&module.exports)module.exports={genome,render};
 if(typeof globalThis!=="undefined")globalThis.render=render;
 `;

@@ -16,9 +16,9 @@ When adding an entry, include the user problem, a small proposed solution, notab
 
 ### Export a standalone JavaScript canvas renderer
 
-**Status: In progress**
+**Status: Done**
 
-The export button and generator are being added next to the existing PNG and TOON actions. The initial version produces a single-script renderer that draws the current genome onto any 2D canvas without app code or network calls.
+The export button and generator are implemented next to the PNG and TOON actions. The initial version produces a self-contained `.js` renderer that draws the current best genome onto a 2D canvas without app code or network calls.
 
 Export the current best genome as JavaScript source that draws the image into a supplied HTML canvas, instead of requiring the app or a TOON importer to view it. The generated artifact should be portable and usable in a small page or another local project.
 
@@ -39,16 +39,20 @@ Export the current best genome as JavaScript source that draws the image into a 
 
 **Acceptance criteria**
 
-- A downloaded file renders the exported genome without app code, network access, or dependencies.
-- Rendering at different canvas sizes preserves geometry and aspect ratio without clipping or distortion.
-- Polygon order, color, and opacity match the source genome; output is deterministic.
-- Invalid or empty genomes produce a clear export error rather than malformed JavaScript.
+- A downloaded file renders the exported genome without app code, network access, or dependencies. Verified in [`sample-render.js`](../sample-render.js), the JavaScript export path in [`js/main.js`](../js/main.js), and the serializer in [`js/genome.js`](../js/genome.js).
+- Rendering at different canvas sizes normalizes polygon coordinates to the requested dimensions.
+- Polygon order, color, and opacity match the source genome; output is deterministic and starts from the app's white canvas background.
+- Invalid, empty, and malformed genome data produce a clear export error rather than malformed JavaScript.
 
 ### Import video and evolve a temporally coherent sequence
 
-**Status: Idea — exploratory; plan the pipeline before implementation**
+**Status: In progress**
 
-Let a user choose a local video, inspect and select frames, evolve the first frame, then use each accepted result as the starting genome for a later frame. Save a sequence that can be rendered back into an animation. This is a larger project than image import: it needs frame selection, temporal continuity, keyframe planning, progress/cancellation, and a reliable sequence export format.
+Let a user choose a local video, evolve the first frame, and accept that result before continuing to the next frame. Each subsequent frame starts from the nearest accepted previous genome. Save the accepted sequence and preview it as an animation.
+
+The current prototype is in a separate Video evolution tab. It samples approximately 30 frames per second across the full local video, starts with the first frame, allows manual evolution and acceptance, carries accepted genomes forward, shows an accepted-frame animation preview, and exports a JSON project. Browser seeking cannot guarantee the source video's exact frame cadence for every codec. Frame editing, scene-cut detection, automatic keyframes, encoded video export, source audio, project reopening, and PNG-frame ZIP export remain future work.
+
+The video tab uses the animation preview as its primary view. A frame search and timeline slider navigate to any sampled frame; Previous and Next move between frames; Play preview loops accepted genomes at approximately 30 fps. Accepting and advancing resumes an already-running manual or automatic evolution pass on the next frame.
 
 **Proposed workflow**
 

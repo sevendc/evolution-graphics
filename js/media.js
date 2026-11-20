@@ -74,3 +74,69 @@ export async function loadImageFile(file, { context, size, setImageName, setImag
     bitmap?.close();
   }
 }
+
+export async function loadVideoFile(file, {
+  context,
+  size,
+  setImageName,
+  setVideoFrames,
+  stopCamera,
+  targetReady,
+  setNotice,
+  reportError
+}) {
+  if (!file || !file.type.startsWith("video/")) {
+    setNotice("Choose a supported video file.", true);
+    return;
+  }
+  const objectUrl = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+  video.src = objectUrl;
+  const frameCanvas = document.createElement("canvas");
+  frameCanvas.width = size;
+  frameCanvas.height = size;
+  const frameContext = frameCanvas.getContext("2d", { willReadFrequently: true });
+  try {
+    await new Promise((resolve, reject) => {
+      video.addEventListener("loadedmetadata", resolve, { once: true });
+      video.addEventListener("error", () => reject(new Error("The selected video could not be decoded.")), { once: true });
+    });
+    if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      throw new Error("The selected video does not have a usable duration.");
+    }
+    const frames = [];
+    const fps = 30;
+    const duration = video.duration;
+    const frameCount = Math.ceil(duration * fps);
+    for (let index = 0; index < frameCount; index += 1) {
+      const time = Math.min(index / fps, duration);
+      await new Promise((resolve, reject) => {
+        const finish = () => resolve();
+        if (Math.abs(video.currentTime - time) < 0.001 && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          resolve();
+          return;
+        }
+        video.addEventListener("seeked", finish, { once: true });
+        video.addEventListener("error", () => reject(new Error("The selected video could not be sampled.")), { once: true });
+        video.currentTime = time;
+      });
+      drawSourceCover(video, frameContext, size);
+      frames.push(frameContext.getImageData(0, 0, size, size));
+      setNotice(`Sampled ${index + 1} of ${frameCount} video frames.`);
+    }
+    context.putImageData(frames[0], 0, 0);
+    setVideoFrames(frames);
+    setImageName(file.name.replace(/\.[^.]+$/, "") || "video");
+    stopCamera();
+    await targetReady();
+  } catch (error) {
+    reportError(error);
+  } finally {
+    video.removeAttribute("src");
+    video.load();
+    URL.revokeObjectURL(objectUrl);
+  }
+}

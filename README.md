@@ -37,11 +37,15 @@ Open [http://localhost:8080](http://localhost:8080). The server binds to `127.0.
 5. To guide manual evolution, drag a rectangle on the target image. Adjust **Guided mutations in selection** to control how often guided mutations target it; focused proposals mix high-error samples with random samples from the target image, using sampled colors and varied polygon shapes to add detail. Manual focus expires after 1,500 completed generations; clear it earlier to return to global guidance. Fitness always scores the full image.
 6. Compare the best candidate with the target. A lower multi-scale error means a closer match. Live statistics are shown below the image comparison.
 7. Once a result is available, choose a removal percentage and analyze simplification. The app scores leave-one-shape-out variants, previews removing the least-impactful shapes, and shows the fitness change. Keep the preview to continue from the smaller genome, or discard it to restore the previous result.
-8. Save the evolved image as PNG or export its genome as TOON. Import a TOON file or paste its text to seed a run.
+8. Save the evolved image as PNG, export a standalone JavaScript renderer, or export its genome as TOON. Import a TOON file or paste its text to seed a run.
+
+Open the **Video evolution** tab to upload a local video. The prototype samples approximately 30 frames per second, evolves the current source frame, and lets you accept it before moving to the next frame. The next frame starts from the accepted genome for the previous frame. Use the animation preview to inspect accepted genomes and save a JSON project. Exact source-frame cadence can vary by browser codec support. Frame editing, scene-cut detection, automatic keyframes, project reopening, encoded video export, and audio are not included in this prototype.
 
 The genome supports up to 512 shapes and 16 points per shape; the complexity slider controls the mutation limit, from triangles (3 points) through 16-point polygons. Mutation strength ranges from 0.001 to 0.7. The population setting ranges up to 2,048 candidates per generation. Larger values can use substantially more GPU time; reduce the population if the page becomes sluggish. Changing the starting shape count resets evolution, while population, structural mutation, and complexity settings can be adjusted during a run.
 
 TOON version 1 triangle genomes remain supported and are still exported when every shape has three points. Genomes containing polygons use TOON version 2 with a `shapes[N]{vertices,r,g,b,opacity,points}:` table; each row stores the point count, color, opacity, then its x/y point pairs.
+
+The JavaScript export is a standalone canvas renderer. Its compact genome stores each shape as `[r,g,b,opacity,x1,y1,...]`; call `render(ctx, width, height)` with a 2D canvas context to draw it.
 
 ## Project files
 

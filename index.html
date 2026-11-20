@@ -28,7 +28,12 @@
       <p>Evolutionary search, rendered on your GPU. A population of translucent polygons competes to recreate the image, one small mutation at a time.</p>
     </section>
 
-    <section class="workspace" aria-label="Image evolution workspace">
+    <nav class="mode-tabs" aria-label="Workspace mode">
+      <button id="imageModeTab" class="mode-tab active" type="button" aria-selected="true">Image evolution</button>
+      <button id="videoModeTab" class="mode-tab" type="button" aria-selected="false">Video evolution</button>
+    </nav>
+
+    <section id="imageWorkspace" class="workspace" aria-label="Image evolution workspace">
       <div class="visual-panel">
         <div class="compare">
           <div class="image-card">
@@ -184,6 +189,48 @@
           </div>
         </div>
       </aside>
+    </section>
+
+    <section id="videoWorkspace" class="video-workspace" aria-label="Video evolution workspace" hidden>
+      <div class="video-toolbar">
+        <div>
+          <div class="section-label">Video sequence</div>
+          <div id="videoStatus" class="setting-help">Upload a video, evolve the first frame, accept it, then continue to the next frame.</div>
+        </div>
+        <div class="video-toolbar-actions">
+          <button id="videoUploadButton" class="button" type="button">Upload video</button>
+          <input id="videoInput" class="hidden-input" type="file" accept="video/*">
+        </div>
+      </div>
+      <div class="video-navigation" aria-label="Animation frame navigation">
+        <label for="videoFrameSearch">Find frame</label>
+        <input id="videoFrameSearch" class="video-search" type="search" placeholder="Frame number or timestamp (00:05)">
+        <button id="videoFrameSearchButton" class="button" type="button">Go</button>
+        <input id="videoFrameSlider" class="video-frame-slider" type="range" min="1" max="1" value="1" aria-label="Frame position">
+      </div>
+      <div class="video-grid">
+        <div class="video-card">
+          <div class="image-heading"><div class="image-title"><span class="image-index">01</span> Source frame</div><span id="videoFrameTag" class="image-tag">NO VIDEO</span></div>
+          <div class="canvas-wrap"><canvas id="videoTargetCanvas" width="160" height="160" aria-label="Current video frame"></canvas></div>
+        </div>
+        <div class="video-card">
+          <div class="image-heading"><div class="image-title"><span class="image-index">02</span> Evolved frame</div><span class="image-tag">CURRENT BEST</span></div>
+          <div class="canvas-wrap"><canvas id="videoResultCanvas" width="160" height="160" aria-label="Current evolved frame"></canvas></div>
+        </div>
+        <div class="video-card">
+          <div class="image-heading"><div class="image-title"><span class="image-index">03</span> Animation preview</div><span id="videoPreviewTag" class="image-tag">STOPPED</span></div>
+          <div class="canvas-wrap"><canvas id="videoPreviewCanvas" width="160" height="160" aria-label="Accepted animation preview"></canvas></div>
+        </div>
+      </div>
+      <div class="video-actions">
+        <button id="videoRunButton" class="button primary" type="button" disabled>Start evolution</button>
+        <button id="videoAcceptNextButton" class="button" type="button" disabled>Accept &amp; next frame</button>
+        <button id="videoPreviousButton" class="button" type="button" disabled>Previous</button>
+        <button id="videoNextButton" class="button" type="button" disabled>Next</button>
+        <button id="videoPlayButton" class="button" type="button" disabled>Play preview</button>
+        <button id="videoSaveButton" class="button ghost" type="button" disabled>Save project</button>
+      </div>
+      <div id="videoProgress" class="setting-help" aria-live="polite">No frames accepted.</div>
     </section>
 
     <footer><span>One genome · <span id="footerTriangleCount">128</span> shapes · alpha-blended polygons</span><span>Fitness and mutation run on the GPU; only periodic previews are read back.</span></footer>
